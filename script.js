@@ -49,7 +49,6 @@ function setStatus(state) {
     }
 }
 
-// --- INITIALIZATION ---
 window.onload = () => {
     if(!navigator.onLine) setStatus('offline');
     
@@ -62,15 +61,24 @@ window.onload = () => {
 
     processOfflineQueue();
 
-    const saved = localStorage.getItem('guts_user');
-    if(saved) { 
-        try { 
-            currentUser = JSON.parse(saved); 
-            performLoginCheck();
-        } catch(e) { 
-            console.error("Data user corrupt, minta login ulang.");
-            localStorage.removeItem('guts_user');
-        } 
+    const isJustLogout = localStorage.getItem('guts_is_logout');
+    const savedUser = localStorage.getItem('guts_user');
+    
+    if(savedUser) { 
+        if (isJustLogout) {
+            console.log("Status: User habis logout. Stay di halaman login.");
+            
+            localStorage.removeItem('guts_is_logout');
+            
+        } else {
+            try { 
+                currentUser = JSON.parse(savedUser); 
+                performLoginCheck();
+            } catch(e) { 
+                console.error("Data user corrupt.");
+                localStorage.removeItem('guts_user'); 
+            } 
+        }
     }
 
     const savedCount = localStorage.getItem('guts_order_counter'); 
@@ -82,7 +90,6 @@ window.onload = () => {
             orders = JSON.parse(savedOrders); 
             if(orders.length > 0 && !activeOrderId) activeOrderId = orders[0].id; 
         } catch(e){ 
-            console.error("Data order corrupt.");
             orders = []; 
         } 
     }
@@ -250,6 +257,7 @@ function logout() {
     if(currentUser && currentUser.Username) {
         localStorage.removeItem('guts_shift_' + currentUser.Username);
     }
+    localStorage.setItem('guts_is_logout', 'true');
     location.reload(); 
 }
 
@@ -1547,7 +1555,7 @@ async function processOfflineQueue() {
 }
 
 function hardResetApp() {
-    if(confirm("PERINGATAN: Ini akan menghapus semua data di HP ini (Antrian Offline, Login, Cache) dan mereload aplikasi.\n\nGunakan hanya jika aplikasi error/macet parah.\n\nLanjutkan?")) {
+    if(confirm("PERINGATAN: Ini akan menghapus semua data yang belum tersimpan (Antrian Offline, Login, Cache) dan mereload aplikasi.\n\nGunakan hanya jika aplikasi error/macet parah.\n\nLanjutkan?")) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
             for(let registration of registrations) { registration.unregister(); } 
         });
@@ -1556,3 +1564,4 @@ function hardResetApp() {
         window.location.reload(true);
     }
 }
+
