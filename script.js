@@ -1545,3 +1545,14 @@ async function processOfflineQueue() {
 
     setStatus('saved');
 }
+
+function hardResetApp() {
+    if(confirm("PERINGATAN: Ini akan menghapus semua data di HP ini (Antrian Offline, Login, Cache) dan mereload aplikasi.\n\nGunakan hanya jika aplikasi error/macet parah.\n\nLanjutkan?")) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) { registration.unregister(); } 
+        });
+        
+        localStorage.clear();
+        window.location.reload(true);
+    }
+}
