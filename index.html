@@ -6,7 +6,7 @@
     <title>GUTS ERP System</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f1c40f">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1041/1041889.png">
+    <link rel="apple-touch-icon" href="./Square150x150Logo.scale-192.png">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     
@@ -15,7 +15,7 @@
             --bg-dark: #121212;
             --bg-card: #1e1e1e;
             --bg-hover: #2a2a2a;
-            --accent: #f1c40f; /* Kuning GUTS */
+            --accent: #f1c40f;
             --accent-hover: #d4ac0d;
             --text-main: #e0e0e0;
             --text-muted: #a0a0a0;
@@ -76,13 +76,13 @@
         .pos-layout { display: flex; gap: 20px; height: 100%; }
         .pos-left { flex: 1; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-right: 5px; }
         .pos-right { 
-            width: 480px;  /* Lebar baru yang lebih luas (bisa diganti 500px) */
-            min-width: 480px; /* Mencegah keranjang gepeng di layar kecil */
+            width: 480px;
+            min-width: 480px;
             background: var(--bg-card); 
             border-left: 1px solid var(--border); 
             display: flex; 
             flex-direction: column; 
-            color: white; /* Memastikan teks selalu putih/muncul */
+            color: white;
         }
         
         /* ORDER TABS */
@@ -100,14 +100,14 @@
             width: 100%; 
             border-collapse: collapse; 
             font-size: 0.9em; 
-            table-layout: fixed; /* PENTING: Mengunci lebar kolom agar tidak berantakan saat ditarik */
+            table-layout: fixed;
         }
 
         /* Tambahan agar isi tabel tidak tumpah */
         .cart-table td, .cart-table th {
             overflow: hidden;
-            white-space: nowrap; /* Mencegah teks turun baris (opsional) */
-            text-overflow: ellipsis; /* Tambah titik-titik (...) jika teks kepanjangan */
+            white-space: nowrap;
+            text-overflow: ellipsis;
         }
         .cart-table td { padding: 10px; border-bottom: 1px solid #333; vertical-align: middle; }
         .btn-xs { background: #444; color: white; border: none; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; }
@@ -130,7 +130,7 @@
         /* --- KAPSTER GRID (PREMIUM CARD STYLE) --- */
         .kapster-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* Responsif */
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 20px;
             padding-bottom: 50px;
         }
@@ -206,7 +206,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
-            flex: 1; /* Isi ruang kosong */
+            flex: 1;
         }
 
         .detail-box h5 {
@@ -219,7 +219,7 @@
         }
 
         .detail-scroll {
-            height: 100px; /* Tinggi fix agar rapi */
+            height: 100px;
             overflow-y: auto;
             font-size: 0.75em;
             color: #ccc;
@@ -249,7 +249,7 @@
 
         /* --- TAMBAHAN: BOOKING BAR --- */
         .booking-row {
-            margin: 0 20px 15px 20px; /* Jarak dari kiri kanan */
+            margin: 0 20px 15px 20px;
             background: #c060dd;
             border: 1px solid #333;
             padding: 10px;
@@ -280,7 +280,7 @@
 
         /* 1. Styling Dropdown Searchable */
         .search-wrapper {
-            position: relative; /* Penting agar hasil pencarian menempel di input ini */
+            position: relative;
             width: 100%;
         }
         .search-results {
@@ -291,9 +291,9 @@
             max-height: 200px;
             overflow-y: auto;
             background: #333;
-            border: 1px solid var(--accent); /* Border kuning saat muncul */
+            border: 1px solid var(--accent);
             border-radius: 0 0 6px 6px;
-            z-index: 100; /* Agar muncul di atas elemen lain */
+            z-index: 100; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .search-item {
@@ -309,8 +309,8 @@
         }
         /* 2. Styling Jarak Antar Transaksi (History) */
         .journal-group-start td {
-            border-top: 2px solid var(--accent) !important; /* Garis pemisah kuning */
-            background: #252525; /* Sedikit lebih terang untuk menandakan grup baru */
+            border-top: 2px solid var(--accent) !important; 
+            background: #252525;
         }
         /* 3. Input Angka Bersih */
         input[type="number"]::-webkit-inner-spin-button, 
@@ -755,33 +755,25 @@
                 display: block !important;
                 position: absolute;
                 top: 0;
-                /* TRIK RATA TENGAH HORIZONTAL */
                 left: 0;
                 right: 0;
                 margin: 0 auto; 
-                
-                /* UKURAN TETAP THERMAL */
                 width: 58mm; 
-                
-                /* Padding aman */
                 padding: 5px 2px;
-                
-                /* Font */
                 font-family: 'Courier New', monospace;
                 color: black;
-                background-color: white; /* Tutup background hitam */
+                background-color: white;
             }
         }
     </style>
 
     <style>
-    /* 1. Untuk Chrome, Edge, Safari, Opera */
     ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
     }
     ::-webkit-scrollbar-track {
-        background: transparent; /* Atau gunakan warna background aplikasi*/
+        background: transparent;
     }
     ::-webkit-scrollbar-thumb {
         background-color: #444;
@@ -793,12 +785,11 @@
         background-color: #777;
     }
 
-    /* 2. Untuk Firefox (Dukungan browser lain) */
     * {
         scrollbar-width: thin;
         scrollbar-color: #444 #121212;
     }
-</style>
+    </style>
 
 <script>
     if ('serviceWorker' in navigator) {
@@ -813,4 +804,5 @@
 <script src="script.js"></script>
 
 </body>
+
 </html>
