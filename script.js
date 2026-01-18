@@ -51,9 +51,7 @@ function setStatus(state) {
 
 window.onload = () => {
     if(!navigator.onLine) setStatus('offline');
-    
     window.addEventListener('offline', () => setStatus('offline'));
-    
     window.addEventListener('online', () => {
         setStatus('saved');
         processOfflineQueue();
@@ -61,12 +59,31 @@ window.onload = () => {
 
     processOfflineQueue();
 
+    if ('wakeLock' in navigator) {
+        let wakeLock = null;
+        const requestWakeLock = async () => {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log('Screen Wake Lock active (Layar dikunci agar tetap nyala)');
+                
+                document.addEventListener('visibilitychange', async () => {
+                    if (wakeLock !== null && document.visibilityState === 'visible') {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                    }
+                });
+            } catch (err) {
+                console.log('Gagal mengunci layar (Fitur tidak didukung browser ini):', err.message);
+            }
+        };
+        requestWakeLock();
+    }
+
     const isJustLogout = localStorage.getItem('guts_is_logout');
     const savedUser = localStorage.getItem('guts_user');
     
     if(savedUser) { 
         if (isJustLogout) {
-            console.log("Status: User habis logout. Stay di halaman login.");
+            console.log("Status: User habis logout manual. Stay di login page.");
             
             localStorage.removeItem('guts_is_logout');
             
@@ -725,8 +742,13 @@ function finalizeTransaction(data, isOnline) {
 async function loadDailyDashboard() {
     const tb = document.getElementById('daily-dashboard-tbody');
     const CACHE_KEY = 'guts_daily_cache_' + getSelectedBranch(); 
+    
+    const elDate = document.getElementById('blank-date-display');
+    if(elDate) elDate.innerText = formatDateIndo(getLocalDate());
+    
     if(tb.innerHTML.trim() === "") tb.innerHTML = '<tr><td colspan="5" align="center">Loading...</td></tr>';
-    document.getElementById('blank-date-display').innerText = formatDateIndo(getLocalDate());
+
+    let serverData = [];
 
     try {
         const antiCacheURL = API_URL + "?t=" + new Date().getTime();
@@ -735,19 +757,42 @@ async function loadDailyDashboard() {
             body: JSON.stringify({ action: "get_daily_detail", payload: { branch: getSelectedBranch(), date: getLocalDate() } })
         });
         const res = await req.json();
+        
         if (res.status) {
-            renderDailyTable(res.data);
-            updateDailyStats(res.data); 
-
-            localStorage.setItem(CACHE_KEY, JSON.stringify(res.data));
-        } else tb.innerHTML = '<tr><td colspan="5" align="center">Belum ada transaksi</td></tr>';
+            serverData = res.data;
+            localStorage.setItem(CACHE_KEY, JSON.stringify(serverData));
+        }
     } catch (e) {
-        const cachedData = localStorage.getItem(CACHE_KEY);
-        if (cachedData) {
-            renderDailyTable(JSON.parse(cachedData));
-            updateDailyStats(data);
-            tb.innerHTML += `<tr><td colspan="5" align="center" style="background:#330000; color:#ffaaaa;">⚠️ OFFLINE MODE</td></tr>`;
-        } else tb.innerHTML = `<tr><td colspan="5" align="center">Gagal Koneksi & No Cache</td></tr>`;
+        console.log("Gagal ambil data server, load cache lokal...");
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) serverData = JSON.parse(cached);
+    }
+
+    const rawQueue = localStorage.getItem('guts_trx_queue');
+    let offlineData = [];
+    
+    if (rawQueue) {
+        const queue = JSON.parse(rawQueue);
+        offlineData = queue.map(q => ({
+            id: q.header.offlineId,
+            jamOut: q.header.jamOut,
+            itemsRaw: JSON.stringify(q.items),
+            method: q.header.method,
+            net: q.header.grandTotal,
+            stylistName: "HP (Offline)",
+            status: 'PENDING_UPLOAD'
+        }));
+    }
+
+    const combinedData = [...offlineData, ...serverData];
+
+    if (combinedData.length > 0) {
+        renderDailyTable(combinedData);
+        
+        if(typeof updateDailyStats === 'function') updateDailyStats(combinedData);
+    } else {
+        tb.innerHTML = '<tr><td colspan="5" align="center">Belum ada transaksi hari ini</td></tr>';
+        if(typeof updateDailyStats === 'function') updateDailyStats([]);
     }
 }
 
@@ -768,27 +813,47 @@ function updateDailyStats(dataList) {
 
 function renderDailyTable(dataList) {
     const tb = document.getElementById('daily-dashboard-tbody');
-    if(!dataList || !dataList.length) { tb.innerHTML = '<tr><td colspan="5" align="center">Belum ada transaksi</td></tr>'; return; }
+    if(!dataList || !dataList.length) { 
+        tb.innerHTML = '<tr><td colspan="5" align="center">Belum ada transaksi</td></tr>'; 
+        return; 
+    }
     
     let html = '';
     dataList.forEach(r => {
         const isVoid = r.status === 'VOIDED';
-        const isReversal = r.id.startsWith('VOID');
-        const rowStyle = isVoid ? "text-decoration: line-through; color: #777;" : 
-                         (isReversal ? "color: #777; font-style: italic;" : "cursor:pointer");
+        const isReversal = String(r.id).startsWith('VOID');
+        const isOffline = r.status === 'PENDING_UPLOAD';
 
-        let summ = "?", k = "-";
-        try { const p = JSON.parse(r.itemsRaw); summ = p[0].name + (p.length > 1 ? "..." : ""); k = p[0].stylistName; } catch(e){}
-        const fullData = encodeURIComponent(JSON.stringify(r));
+        let rowStyle = "cursor:pointer; border-bottom: 1px solid #eee;";
+        let statusIcon = "";
+
+        if (isVoid) {
+            rowStyle += "text-decoration: line-through; color: #999;";
+        } else if (isReversal) {
+            rowStyle += "color: #777; font-style: italic;";
+        } else if (isOffline) {
+            rowStyle += "background: rgba(243, 156, 18, 0.1); border-left: 4px solid #f39c12;";
+            statusIcon = `<i class="fas fa-clock" style="color: #f39c12; margin-right:5px;" title="Menunggu Koneksi Internet"></i>`;
+        }
+
+        let summ = "?", k = r.stylistName || "-";
+        try { 
+            const p = (typeof r.itemsRaw === 'string') ? JSON.parse(r.itemsRaw) : r.itemsRaw;
+            if(p && p.length > 0) {
+                summ = p[0].name + (p.length > 1 ? " (+"+(p.length-1)+" items)" : ""); 
+                if(!k || k==='-') k = p[0].stylistName;
+            }
+        } catch(e){ console.error(e); }
         
+        const fullData = encodeURIComponent(JSON.stringify(r));
         let jamTampil = String(r.jamOut).replace('.', ':');
-
-        html += `<tr onclick="${isVoid || isReversal ? '' : `showTrxDetail('${fullData}')`}" style="${rowStyle}">
-                    <td>${jamTampil}</td> 
-                    <td>${k}</td>
-                    <td><b>${summ}</b> ${isVoid ? '(BATAL)' : ''} ${isReversal ? '(REVERSAL)' : ''}</td>
-                    <td>${r.method}</td>
-                    <td align="right">${fmtRp(r.net)}</td>
+        
+        html += `<tr onclick="${(isVoid || isReversal || isOffline) ? '' : `showTrxDetail('${fullData}')`}" style="${rowStyle}">
+                    <td style="padding: 12px 8px;">${statusIcon} ${jamTampil}</td> 
+                    <td style="padding: 12px 8px;">${k}</td>
+                    <td style="padding: 12px 8px;"><b>${summ}</b> ${isVoid ? '(BATAL)' : ''} ${isReversal ? '(REV)' : ''}</td>
+                    <td style="padding: 12px 8px;">${r.method}</td>
+                    <td style="padding: 12px 8px;" align="right">${fmtRp(r.net)}</td>
                  </tr>`;
     });
     tb.innerHTML = html;
@@ -1564,4 +1629,5 @@ function hardResetApp() {
         window.location.reload(true);
     }
 }
+
 
