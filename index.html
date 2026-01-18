@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUTS ERP System</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f1c40f">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1041/1041889.png">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-card: #1e1e1e;
+            --bg-hover: #2a2a2a;
+            --accent: #f1c40f; /* Kuning GUTS */
+            --accent-hover: #d4ac0d;
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --border: #333;
+            --red: #e74c3c;
+            --green: #2ecc71;
+            --shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; }
+        
+        /* UTILITIES */
+        .hidden { display: none !important; }
+        .btn-pay { background: var(--accent); color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        .btn-pay:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-pay:disabled { background: #555; cursor: not-allowed; }
+        .btn-pay.red { background: var(--red); color: white; }
+        .btn-pay.green { background: var(--green); color: white; }
+        input, select, textarea { background: #252525; border: 1px solid var(--border); color: white; padding: 8px; border-radius: 4px; width: 100%; outline: none; }
+        input:focus, select:focus { border-color: var(--accent); }
+
+        /* LOGIN PAGE */
+        #login-page { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: #000; }
+        .login-box { background: var(--bg-card); padding: 40px; border-radius: 12px; border: 1px solid var(--border); width: 320px; text-align: center; }
+        .login-box h1 { color: var(--accent); margin-bottom: 20px; letter-spacing: 2px; }
+        .login-input { margin-bottom: 15px; }
+
+        /* LAYOUT DASHBOARD */
+        #dashboard-container { display: flex; height: 100vh; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 250px; background: #000; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; }
+        .user-profile { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .user-name { font-weight: bold; font-size: 1.1em; color: var(--accent); }
+        .user-role { font-size: 0.6em; color: var(--text-muted); line-height: 1.5; margin-top: 10px; white-space: normal;}
+
+        .menu-list { flex: 1; display: flex; flex-direction: column; gap: 5px; overflow-y: auto; }
+        .menu-item { padding: 12px 15px; border-radius: 8px; cursor: pointer; color: var(--text-muted); transition: 0.2s; display: flex; align-items: center; gap: 12px; }
+        .menu-item:hover { background: var(--bg-hover); color: white; }
+        .menu-item.active { background: var(--accent); color: black; font-weight: bold; }
+        .menu-item i { width: 20px; text-align: center; }
+
+        /* CONTENT AREA */
+        .content { flex: 1; display: flex; flex-direction: column; background: var(--bg-dark); position: relative; overflow: hidden; }
+        
+        /* TOP BAR */
+        .top-bar { height: 60px; background: var(--bg-card); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+        .top-left { display: flex; align-items: center; gap: 15px; }
+        .branch-badge { background: #333; padding: 4px 10px; border-radius: 4px; font-size: 0.85em; border: 1px solid #555; }
+        .status-ind { display: flex; align-items: center; gap: 5px; font-size: 0.9em; font-weight: bold; }
+
+        /* VIEW SECTIONS */
+        .view-section { padding: 20px; height: calc(100vh - 60px); overflow-y: auto; }
+        .content-header { color: var(--accent); font-style: italic; font-weight: bold; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);}
+
+        /* POS GRID */
+        .pos-layout { display: flex; gap: 20px; height: 100%; }
+        .pos-left { flex: 1; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-right: 5px; }
+        .pos-right { 
+            width: 480px;  /* Lebar baru yang lebih luas (bisa diganti 500px) */
+            min-width: 480px; /* Mencegah keranjang gepeng di layar kecil */
+            background: var(--bg-card); 
+            border-left: 1px solid var(--border); 
+            display: flex; 
+            flex-direction: column; 
+            color: white; /* Memastikan teks selalu putih/muncul */
+        }
+        
+        /* ORDER TABS */
+        .order-tabs { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 5px; margin-bottom: 10px; }
+        .order-tab { background: #333; padding: 6px 12px; border-radius: 4px; font-size: 0.85em; white-space: nowrap; cursor: pointer; border: 1px solid transparent; display: flex; align-items: center; gap: 8px; }
+        .order-tab.active { border-color: var(--accent); color: var(--accent); background: #222; }
+        .close-tab { font-size: 1.1em; color: #777; } .close-tab:hover { color: var(--red); }
+
+        /* CART AREA */
+        .cart-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .cart-header { padding: 15px; border-bottom: 1px solid var(--border); }
+        .cart-items { flex: 1; overflow-y: auto; padding: 0; }
+        .cart-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        .cart-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-size: 0.9em; 
+            table-layout: fixed; /* PENTING: Mengunci lebar kolom agar tidak berantakan saat ditarik */
+        }
+
+        /* Tambahan agar isi tabel tidak tumpah */
+        .cart-table td, .cart-table th {
+            overflow: hidden;
+            white-space: nowrap; /* Mencegah teks turun baris (opsional) */
+            text-overflow: ellipsis; /* Tambah titik-titik (...) jika teks kepanjangan */
+        }
+        .cart-table td { padding: 10px; border-bottom: 1px solid #333; vertical-align: middle; }
+        .btn-xs { background: #444; color: white; border: none; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; }
+
+        .cart-footer { padding: 15px; background: #1a1a1a; border-top: 1px solid var(--border); }
+        .bill-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9em; color: #bbb; }
+        .bill-total { display: flex; justify-content: space-between; margin-top: 10px; font-size: 1.2em; font-weight: bold; color: var(--accent); padding-top: 10px; border-top: 1px dashed #444; }
+
+        /* TABLES (Stock, Rekap) */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        .data-table th { background: #222; color: var(--accent); position: sticky; top: 0; }
+        .data-table tr:hover { background: #222; }
+
+        /* LOADING & MODAL */
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; display: flex; justify-content: center; align-items: center; color: var(--accent); font-size: 1.5em; flex-direction: column; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+        .modal-content { background: var(--bg-card); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+
+        /* --- KAPSTER GRID (PREMIUM CARD STYLE) --- */
+        .kapster-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* Responsif */
+            gap: 20px;
+            padding-bottom: 50px;
+        }
+
+        .kapster-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kapster-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            border-color: #555;
+        }
+
+        /* Header Kartu (Nama & Profil) */
+        .card-header {
+            padding: 20px;
+            background: linear-gradient(to right, #252525, #1a1a1a);
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .k-name {
+            font-size: 1.3em;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .k-badge {
+            font-size: 0.75em;
+            color: var(--accent);
+            letter-spacing: 1px;
+            margin-top: 2px;
+        }
+
+        /* Statistik Blok (Ungu & Kuning - Sesuai Gambar Lama) */
+        .card-stats {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .stat-block {
+            padding: 15px;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-purple { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: black; }
+        .stat-yellow { background: linear-gradient(135deg, #f1c40f, #f39c12); color: black; }
+        .stat-blue { background: linear-gradient(135deg, #3498db, #34b4db); color: black; }
+
+        .sb-val { font-size: 2em; font-weight: 900; line-height: 1; margin-bottom: 5px; }
+        .sb-label { font-size: 0.65em; font-weight: 700; text-transform: uppercase; opacity: 0.8; }
+        .sb-icon { position: absolute; right: -5px; bottom: -10px; font-size: 3.5em; opacity: 0.15; transform: rotate(-15deg); }
+
+        /* Area Rincian (List Scroll) */
+        .card-details {
+            padding: 0 20px 20px 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            flex: 1; /* Isi ruang kosong */
+        }
+
+        .detail-box h5 {
+            color: #666;
+            font-size: 0.7em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+
+        .detail-scroll {
+            height: 100px; /* Tinggi fix agar rapi */
+            overflow-y: auto;
+            font-size: 0.75em;
+            color: #ccc;
+        }
+
+        .detail-row {
+            border-bottom: 1px dashed #333;
+            padding: 3px 0;
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis;
+        }
+
+        /* Footer (Status) */
+        .card-footer {
+            padding: 10px;
+            text-align: center;
+            font-size: 0.8em;
+            font-weight: bold;
+            border-top: 1px solid #333;
+            background: #151515;
+        }
+
+        /* Efek Juara (Glow Border) */
+        .rank-1 { border: 2px solid #f1c40f; box-shadow: 0 0 15px rgba(241, 196, 15, 0.1); }
+        .rank-1 .card-header { background: linear-gradient(to right, #3d3305, #1a1a1a); }
+
+        /* --- TAMBAHAN: BOOKING BAR --- */
+        .booking-row {
+            margin: 0 20px 15px 20px; /* Jarak dari kiri kanan */
+            background: #c060dd;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: black;
+        }
+
+        .booking-val {
+            font-weight: bold;
+            color: black;
+            font-size: 1.1em;
+        }
+
+        .k-header { border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px; }
+        .k-name { font-size: 1.2em; font-weight: bold; color: var(--accent); }
+        .k-stats { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .k-stat-item { text-align: center; background: #111; padding: 8px; border-radius: 6px; flex: 1; margin: 0 4px; }
+        .k-stat-val { font-weight: bold; font-size: 1.1em; }
+        .k-stat-lbl { font-size: 0.7em; color: #888; text-transform: uppercase; }
+        .k-list-box { background: #151515; padding: 10px; border-radius: 6px; margin-top: 10px; max-height: 100px; overflow-y: auto; font-size: 0.85em; }
+        .k-list-title { display: block; color: #aaa; margin-bottom: 5px; font-size: 0.8em; font-weight: bold; }
+        .k-list-item { border-bottom: 1px dashed #333; padding: 3px 0; color: #ccc; }
+
+        /* 1. Styling Dropdown Searchable */
+        .search-wrapper {
+            position: relative; /* Penting agar hasil pencarian menempel di input ini */
+            width: 100%;
+        }
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #333;
+            border: 1px solid var(--accent); /* Border kuning saat muncul */
+            border-radius: 0 0 6px 6px;
+            z-index: 100; /* Agar muncul di atas elemen lain */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .search-item {
+            padding: 8px 10px;
+            border-bottom: 1px solid #444;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #eee;
+        }
+        .search-item:hover {
+            background: var(--accent);
+            color: #000;
+        }
+        /* 2. Styling Jarak Antar Transaksi (History) */
+        .journal-group-start td {
+            border-top: 2px solid var(--accent) !important; /* Garis pemisah kuning */
+            background: #252525; /* Sedikit lebih terang untuk menandakan grup baru */
+        }
+        /* 3. Input Angka Bersih */
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { 
+        -webkit-appearance: none; 
+        margin: 0; 
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay" class="hidden">
+        <i class="fas fa-circle-notch fa-spin fa-2x"></i>
+        <div style="margin-top: 15px; font-size: 0.6em; letter-spacing: 2px;">PROCESSING...</div>
+    </div>
+
+    <div id="login-page">
+        <div class="login-box">
+            <h1>Guts System</h1>
+            <div class="login-input">
+                <input type="text" id="username" placeholder="Username" autocomplete="off">
+            </div>
+            <div class="login-input">
+                <input type="password" id="password" placeholder="Password">
+            </div>
+            <button class="btn-pay" style="width:100%" onclick="performLogin()" id="btn-login">LOGIN</button>
+            <div style="margin-top: 20px; font-size: 0.8em; color: #666;">Guts Barber and Shop<br>©copyright 2026</div>
+        </div>
+    </div>
+
+    <div id="dashboard-container" class="hidden">
+        
+        <aside class="sidebar">
+            <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); text-align: center;">
+                <div style="font-weight: bold; font-size: 1.1em; color: var(--accent); letter-spacing: 1px; margin-bottom: 8px;">
+                    Guts Barber and Shop
+                </div>
+                <span id="branch-badge" class="branch-badge" style="font-size: 0.9em;">HO</span>
+            </div>
+            
+            <nav class="menu-list">
+                <div class="menu-item active" onclick="switchMenu('pos')"><i class="fas fa-cash-register"></i> <span class="menu-text">Kasir</span></div>
+                <div class="menu-item" onclick="switchMenu('stock')"><i class="fas fa-boxes"></i> <span class="menu-text">Persediaan</span></div>
+                <div class="menu-item" onclick="switchMenu('ops')"><i class="fas fa-book"></i> <span class="menu-text">Pembukuan</span></div>
+                <div class="menu-item" onclick="switchMenu('rekap')"><i class="fas fa-file-invoice-dollar"></i> <span class="menu-text">Laporan Harian</span></div>
+                <div class="menu-item" onclick="switchMenu('kapster')"><i class="fas fa-users"></i> <span class="menu-text">Kapster</span></div>
+                <div class="menu-item" onclick="switchMenu('absen')"><i class="fas fa-camera"></i> <span class="menu-text">Presensi</span></div>
+            </nav>
+
+            <div style="margin-top: auto;">
+                <div class="user-profile" style="border-bottom: none; border-top: 1px solid var(--border); padding-top: 15px; margin-bottom: 10px; text-align: center;">
+                    <div class="user-name" id="user-display" style="color:#666; font-size: 1.1em; margin-bottom: 2px;">User</div>
+                    <div class="user-role" id="user-address-display">Loading Address...</div>
+                </div>
+
+                <div id="admin-branch-container" class="hidden" style="margin-bottom: 10px;">
+                    <select id="admin-branch-select" onchange="loadMaster(); refreshAllViews(); updateSidebarAddress();">
+                        <option value="HO">HO (All Access)</option>
+                        <option value="Cimahi">Cabang Cimahi</option>
+                        <option value="Leuwigajah">Cabang Leuwigajah</option>
+                    </select>
+                </div>
+                <button class="btn-pay red" style="width: 100%;" onclick="prepareCloseShift()">
+                    <i class="fas fa-power-off"></i> Logout
+                </button>
+            </div>
+        </aside>
+
+        <main class="content">
+            
+            <header class="top-bar">
+                <div class="top-left">
+                    <div id="sync-status" class="status-ind" style="color:var(--green)">
+                        <i class="fas fa-check-circle"></i> <span>Connected</span>
+                    </div>
+                </div>
+                
+                <div style="font-weight: bold; font-size: 1.2em; color: var(--accent); letter-spacing:1px;">
+                    Guts Daily Report
+                </div>
+                
+                <div id="time-in-display" style="font-family: monospace; font-size: 1.1em;">--:--</div>
+            </header>
+
+            <section id="view-pos" class="view-section">
+                <div class="pos-layout">
+                    <div class="pos-left">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div class="order-tabs" id="order-tabs-list"></div>
+                            <button onclick="addNewOrderTab()" class="btn-xs" style="width:30px; height:30px; font-size:1.2em;">+</button>
+                        </div>
+
+                        <div id="pos-blank-state" style="text-align:center; padding: 10px 40px; color: #a0a0a0;">
+    
+                            <i class="fas fa-cash-register fa-3x" style="margin-bottom: 15px; opacity:0.5;"></i>
+                            
+                            <h3 style="margin-bottom: 10px;">Daftar Transaksi Hari Ini (<span id="blank-date-display"></span>)</h3>
+                            
+                            <div style="text-align:right; margin-bottom:10px;">
+                                <button class="btn-xs" style="width:auto; padding:4px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px;"><i class="fas fa-sync"></i> Refresh</button>
+                            </div>
+                            <table class="data-table">
+                                <thead><tr><th>Jam</th><th>Kapster</th><th>Item</th><th>Payment</th><th align="right">Total</th></tr></thead>
+                                <tbody id="daily-dashboard-tbody"><tr><td colspan="5">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+
+                        <div id="pos-workspace" class="hidden">
+                            <div style="background:#222; padding:15px; border-radius:8px; display:grid; grid-template-columns: 2fr 1.5fr 1fr; gap:10px; margin-bottom:15px;">
+                                <div><label>Kapster - Customer</label><input type="text" id="cust-name" placeholder="Guest" onchange="saveCurrentState()"></div>
+                                <div><label>WhatsApp Customer</label><input type="text" id="cust-wa" placeholder="" onchange="saveCurrentState()"></div>
+                                <div><label>Tipe</label>
+                                    <select id="visit-type" onchange="saveCurrentState()">
+                                        <option value="WALK-IN">Walk-In</option>
+                                        <option value="BOOKING">Booking</option>
+                                        <option value="MEMBER">Member</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                                <div style="background:#1e1e1e; border:1px solid #333; padding:15px; border-radius:8px;">
+                                    <div style="color:var(--accent); font-weight:bold; margin-bottom:10px;">Input Jasa</div>
+                                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                                        <select id="stylist-dropdown"><option>-- Kapster --</option></select>
+                                    </div>
+                                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                                        <select id="service-dropdown"><option>-- Jasa --</option></select>
+                                    </div>
+                                    <button class="btn-pay" style="width:100%; background:#444; color:white;" onclick="addItemFromService()">+ Tambah jasa</button>
+                                </div>
+
+                                <div style="background:#1e1e1e; border:1px solid #333; padding:15px; border-radius:8px;">
+                                    <div style="color:var(--green); font-weight:bold; margin-bottom:10px;">Input Produk</div>
+                                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                                        <select id="seller-dropdown"><option>-- Seller --</option></select>
+                                    </div>
+                                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                                        <select id="product-dropdown"><option>-- Produk --</option></select>
+                                    </div>
+                                    <button class="btn-pay" style="width:100%; background:#444; color:white;" onclick="addItemFromProduct()">+ Tambah Produk</button>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top:15px;">
+                                <label>Notes:</label>
+                                <textarea id="order-note" rows="1" placeholder="Catatan khusus..." onchange="saveCurrentState()"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pos-right">
+                        <div class="cart-container">
+                            <div class="cart-header">
+                                <h3>Cart</h3>
+                            </div>
+                            <div class="cart-items">
+                                <table class="cart-table">
+                                    <thead>
+                                        <tr>
+                                            <th width="40%">Item</th>
+                                            <th width="20%">Qty</th>
+                                            <th width="20%">Diskon</th> <th width="20%" style="text-align:center;">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cart-items"></tbody>
+                                </table>
+                            </div>
+                            <div class="cart-footer">
+                                <div class="bill-row"><span>Subtotal</span><span id="val-gross">0</span></div>
+                                <div class="bill-row" style="color:var(--red);"><span>Diskon</span><span id="val-discount">0</span></div>
+                                <div class="bill-total"><span>GRAND TOTAL</span><span id="val-total">0</span></div>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px;">
+                                    <button class="btn-pay" onclick="checkout('CASH')"><i class="fas fa-money-bill"></i> CASH</button>
+                                    <button class="btn-pay" style="background:white; color:black;" onclick="checkout('QRIS')"><i class="fas fa-qrcode"></i> QRIS</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-stock" class="view-section hidden">
+                <header class="content-header">
+                    <h3><i class="fas fa-boxes"></i>Stok Persediaan</h3>
+                    <button class="btn-xs" style="width:auto; padding:4px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px;" onclick="refreshStock()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </header>
+                
+                <div style="background:var(--bg-card); padding:15px; margin-bottom:20px; border-radius:8px; display:flex; gap:10px; align-items:flex-end;">
+                    <div style="flex:1;">
+                        <label>Pilih Barang Restock:</label>
+                        <select id="restock-sku"><option>Loading...</option></select>
+                    </div>
+                    <div style="width:100px;">
+                        <label>Quantity:</label>
+                        <input type="number" id="restock-qty" placeholder="0">
+                    </div>
+                    <button class="btn-pay" onclick="processRestock()">SIMPAN</button>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>SKU</th><th>Nama Barang</th><th>Kategori</th><th>Sisa Stok di Cabang ini</th></tr></thead>
+                    <tbody id="stock-tbody"></tbody>
+                </table>
+            </section>
+
+            <section id="view-ops" class="view-section hidden">
+                <header class="content-header">
+                    <h3><i class="fas fa-book"></i> Jurnal Manual</h3>
+                    <button class="btn-xs" style="width:auto; padding:4px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px;" onclick="loadJournalHistory()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </header>
+                
+                <div style="background:var(--bg-card); padding:20px; border-radius:8px; border:1px solid #333; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                        <div style="display:flex; gap:10px;">
+                            <input type="date" id="journal-date" style="width:150px;">
+                            <select id="journal-category" style="width:150px;">
+                                <option value="OUT">Kas Keluar</option>
+                                <option value="IN">Kas Masuk</option>
+                                <option value="ADJ">Umum</option>
+                            </select>
+                        </div>
+                        <div style="font-weight:bold; color:var(--accent); font-size:1.2em;" id="balance-status">Tidak Balance</div>
+                    </div>
+                    
+                    <table class="data-table" style="margin-bottom:15px;">
+                        <thead><tr><th>Keterangan</th><th>Akun</th><th width="15%">Debit</th><th width="15%">Kredit</th><th width="5%">Action</th></tr></thead>
+                        <tbody id="journal-input-rows"></tbody>
+                    </table>
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <button onclick="addJournalRow()" class="btn-xs" style="width:auto; padding:5px 15px;">+ Tambah Baris</button>
+                        <div style="display:flex; gap:20px; font-weight:bold;">
+                            <span>Total Debit: <span id="total-debit" style="color:var(--green)">0</span></span>
+                            <span>Total Kredit: <span id="total-kredit" style="color:var(--red)">0</span></span>
+                        </div>
+                        <button class="btn-pay" onclick="saveComplexJournal()">CATAT JURNAL</button>
+                    </div>
+                </div>
+
+                <div style="margin-top:20px; margin-bottom:10px; border-top:1px dashed #444; padding-top:15px;">
+                    <h4 style="color:#aaa; margin-bottom:10px;">Riwayat Jurnal</h4>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <div style="flex:1;">
+                            <input type="date" id="history-start-date" style="background:#222; border:1px solid #444;">
+                        </div>
+                        <span style="color:#666;">s/d</span>
+                        <div style="flex:1;">
+                            <input type="date" id="history-end-date" style="background:#222; border:1px solid #444;">
+                        </div>
+                        <button class="btn-xs" style="width:auto; padding:8px 20px; background:var(--accent); color:black; font-weight:bold; height:38px;" onclick="loadJournalHistory()">
+                            <i class="fas fa-search"></i> Tampilkan
+                        </button>
+                    </div>
+                </div>
+
+                <div style="height:350px; overflow-y:auto; border:1px solid #333; border-radius:6px;">
+                    <table class="data-table">
+                        <thead><tr><th>Tanggal</th><th>Ref</th><th>Akun</th><th>Debit</th><th>Kredit</th><th>Keterangan</th></tr></thead>
+                        <tbody id="journal-history-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="view-rekap" class="view-section hidden">
+                <header class="content-header">
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Laporan Harian</h3>
+                    <button class="btn-xs" style="width:auto; padding:4px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px;" onclick="loadMonthlyRecap()">
+                    <i class="fas fa-sync"></i> Refresh
+                </header>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; margin-bottom:20px;">
+                    <div style="background:#2c3e50; padding:20px; border-radius:8px; border-left:5px solid #3498db;">
+                        <div style="font-size:0.9em; color:#bdc3c7;">Saldo Awal Petty Cash</div>
+                        <div style="font-size:1.8em; font-weight:bold; color:#ecf0f1;" id="val-start-petty">0</div>
+                    </div>
+                    <div style="background:#2c3e50; padding:20px; border-radius:8px; border-left:5px solid var(--accent);">
+                        <div style="font-size:0.9em; color:#bdc3c7;">Terpakai (Refill Petty Cash)</div>
+                        <div style="font-size:1.8em; font-weight:bold; color:var(--accent);" id="val-refill">0</div>
+                    </div>
+                    <div style="background:#2c3e50; padding:20px; border-radius:8px; border-left:5px solid var(--green);">
+                        <div style="font-size:0.9em; color:#bdc3c7;">Sisa Saldo Petty Cash</div>
+                        <div style="font-size:1.8em; font-weight:bold; color:var(--green);" id="val-curr-petty">0</div>
+                    </div>
+                </div>
+
+                <table class="data-table">
+                    <thead><tr><th>Tanggal</th><th>Cash IN</th><th>QRIS IN</th><th>Petty Cash (Out)</th><th>Saldo Cash</th><th>Customer</th><th>Promo</th></tr></thead>
+                    <tbody id="rekap-monthly-tbody"></tbody>
+                </table>
+            </section>
+
+            <section id="view-kapster" class="view-section hidden">
+                <header class="content-header">
+                    <h3><i class="fas fa-users"></i> Key Performance Indicators</h3>
+                    <div style="display:flex; gap:10px;">
+                        <input type="date" id="kapster-start-date" style="width:140px;">
+                        <input type="date" id="kapster-end-date" style="width:140px;">
+                        <button class="btn-pay" style="padding:5px 15px;" onclick="loadKapsterReport()">Lihat</button>
+                    </div>
+                </header>
+                <div id="kapster-report-container" class="leaderboard-container"></div>
+            </section>
+
+            <section id="view-absen" class="view-section hidden">
+                <header class="content-header">
+                    <h3><i class="fas fa-camera"></i> Presensi Harian</h3>
+                </header>
+                
+                <div style="display:flex; flex-direction:column; align-items:center; gap:20px; max-width:400px; margin:40px auto; background:var(--bg-card); padding:30px; border-radius:12px; border:1px solid #444; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                    
+                    <div style="width:100%;">
+                        <label style="display:block; margin-bottom:8px; color:#aaa;">Nama:</label>
+                        <select id="absen-nama" onchange="autoSelectShift()" style="width:100%; height:45px; font-size:1.1em; background:#222; color:white; border:1px solid #555; border-radius:6px; padding:0 10px;">
+                            <option value="">-- Pilih Nama --</option>
+                        </select>
+                    </div>
+
+                    <div style="width:100%;">
+                        <label style="display:block; margin-bottom:8px; color:#aaa;">Shift (Sesuai Jadwal):</label>
+                        <select id="absen-shift" disabled style="width:100%; height:45px; font-size:1.1em; background:#333; color:#888; border:1px solid #444; border-radius:6px; padding:0 10px; cursor:not-allowed;">
+                            <option value="">-- Otomatis --</option>
+                            <option value="PAGI">SHIFT PAGI (Max 09:05)</option>
+                            <option value="SIANG">SHIFT SIANG (Max 13:00)</option>
+                        </select>
+                        <div style="font-size:0.8em; color:#666; margin-top:5px; font-style:italic;">
+                            *Shift otomatis mingguan. Hubungi Admin jika ada perubahan.
+                        </div>
+                    </div>
+
+                    <div style="position:relative; width:100%; height:280px; background:#000; overflow:hidden; border-radius:8px; border:2px solid #555;">
+                        <video id="camera-feed" autoplay playsinline style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+                        
+                        <img id="camera-result" style="display:none; width:100%; height:100%; object-fit:cover;">
+                        
+                        <canvas id="camera-canvas" style="display:none;"></canvas>
+
+                        <div id="camera-placeholder" style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#555; flex-direction:column;">
+                            <i class="fas fa-camera" style="font-size:3em; margin-bottom:10px;"></i>
+                            <span>Kamera Mati</span>
+                        </div>
+                    </div>
+                    <div id="absen-msg" style="color:var(--red); font-weight:bold; text-align:center; min-height:20px;"></div>
+
+                    <div style="display:flex; gap:10px; width:100%;">
+                        <button id="btn-start-cam" onclick="startCamera()" class="btn-pay" style="flex:1; background:#444; color:white; border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                            <i class="fas fa-power-off"></i> Aktifkan Kamera
+                        </button>
+                        
+                        <button id="btn-snap" onclick="takeSnapshot()" class="btn-pay" style="flex:1; background:var(--accent); color:black; border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:bold; display:none;">
+                            <i class="fas fa-camera"></i> Ambil Foto
+                        </button>
+                        
+                        <button id="btn-retake" onclick="resetCamera()" class="btn-pay" style="flex:1; background:#555; color:white; border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:bold; display:none;">
+                            <i class="fas fa-redo"></i> Ulangi
+                        </button>
+                    </div>
+
+                    <button id="btn-submit-absen" onclick="submitAbsensi()" class="btn-pay" style="width:100%; background:var(--green); color:white; border:none; padding:15px; border-radius:6px; font-size:1.1em; font-weight:bold; cursor:pointer; margin-top:10px; display:none;">
+                        <i class="fas fa-paper-plane"></i> KIRIM PRESENSI
+                    </button>
+                    
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <div id="modal-open-shift" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="color:var(--accent); text-align:center; margin-bottom:20px;">Buka Toko</h2>
+            <div style="margin-bottom:10px;">
+                <label>Saldo Awal Petty Cash hari ini:</label>
+                <input type="text" id="shift-start-bal" placeholder="isi nominal petty cash" onkeyup="formatInputRupiah(this)" style="font-size:1.1em; padding:10px;">
+            </div>
+            <button class="btn-pay" style="width:100%; font-size:1.1em;" onclick="processOpenShift()">OPEN</button>
+        </div>
+    </div>
+
+    <div id="modal-close-shift" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="color:var(--red); text-align:center; margin-bottom:20px;">Tutup Toko</h2>
+            <div style="background:#111; padding:15px; border-radius:8px; margin-bottom:15px; font-size:0.9em;">
+                <div class="bill-row"><span>Saldo Awal Petty Cash:</span><span id="disp-start-bal">0</span></div>
+                <div class="bill-row"><span>Pemasukan Cash:</span><span id="disp-cash-in">0</span></div>
+                <div class="bill-row"><span>Pengeluaran Cash / Petty Cash:</span><span id="disp-cash-out">0</span></div>
+                <div class="bill-total" style="color:white; border-color:#555;"><span>Jumlah Cash seharusnya:</span><span id="disp-sys-calc">0</span></div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label>Saldo Cash + Petty Cash hari ini:</label>
+                <input type="text" id="shift-end-bal" placeholder="0" onkeyup="formatInputRupiah(this)" style="font-size:1.2em; padding:8px;">
+            </div>
+            <button class="btn-pay red" style="width:100%; font-size:1.1em;" onclick="processCloseShift()">Closing & Logout</button>
+            <button class="btn-pay" style="width:100%; background:#333; color:#aaa; margin-top:10px;" onclick="document.getElementById('modal-close-shift').classList.add('hidden')">Batal</button>
+        </div>
+    </div>
+
+    <div id="trx-detail-modal" class="modal hidden">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+                <h3 style="color:var(--accent);">Detail Transaksi</h3>
+                <span onclick="closeModal()" style="cursor:pointer; font-size:1.5em;">&times;</span>
+            </div>
+            <div style="color:#888; font-size:0.9em; margin-bottom:10px;">ID: <span id="modal-trx-id"></span></div>
+            <div id="modal-trx-body"></div>
+        </div>
+    </div>
+
+    <div id="modal-void-auth" class="modal hidden">
+        <div class="modal-content" style="text-align:center;">
+            <i class="fas fa-lock fa-3x" style="color:var(--red); margin-bottom:15px;"></i>
+            <h3>Otorisasi Admin</h3>
+            <p style="color:#aaa; margin-bottom:15px;">Masukkan password admin untuk batalkan transaksi.</p>
+            <input type="password" id="void-admin-pass" placeholder="PIN / Password" style="text-align:center; font-size:1.2em; margin-bottom:15px;">
+            <button class="btn-pay red" style="width:100%;" onclick="executeVoid()">CONFIRM VOID</button>
+            <button class="btn-pay" style="width:100%; background:#333; margin-top:10px;" onclick="document.getElementById('modal-void-auth').classList.add('hidden')">Batal</button>
+        </div>
+    </div>
+
+    <div id="print-area" style="display:none;"></div>
+    
+    <style>
+        @media print {
+            @page {
+                margin: 0;
+                size: auto;
+            }
+            
+            body * {
+                visibility: hidden;
+            }
+            
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+
+            #print-area {
+                display: block !important;
+                position: absolute;
+                top: 0;
+                /* TRIK RATA TENGAH HORIZONTAL */
+                left: 0;
+                right: 0;
+                margin: 0 auto; 
+                
+                /* UKURAN TETAP THERMAL */
+                width: 58mm; 
+                
+                /* Padding aman */
+                padding: 5px 2px;
+                
+                /* Font */
+                font-family: 'Courier New', monospace;
+                color: black;
+                background-color: white; /* Tutup background hitam */
+            }
+        }
+    </style>
+
+    <style>
+    /* 1. Untuk Chrome, Edge, Safari, Opera */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent; /* Atau gunakan warna background aplikasi*/
+    }
+    ::-webkit-scrollbar-thumb {
+        background-color: #444;
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: #777;
+    }
+
+    /* 2. Untuk Firefox (Dukungan browser lain) */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: #444 #121212;
+    }
+</style>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('GUTS Offline Ready:', reg.scope))
+                .catch(err => console.log('GUTS Offline Fail:', err));
+        });
+    }
+</script>
+
+<script src="script.js"></script>
+
+</body>
+</html>
