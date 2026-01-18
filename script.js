@@ -245,10 +245,12 @@ async function processCloseShift() {
     }
 }
 
+/* --- REVISI: LOGOUT AMAN (OFFLINE FRIENDLY) --- */
 function logout() { 
-    localStorage.removeItem('guts_shift_' + (currentUser ? currentUser.Username : ''));
-    localStorage.removeItem('guts_user');
-    localStorage.clear(); location.reload(); 
+    if(currentUser && currentUser.Username) {
+        localStorage.removeItem('guts_shift_' + currentUser.Username);
+    }
+    location.reload(); 
 }
 
 function showDashboard() {
@@ -597,40 +599,119 @@ function updQty(i, v) { const o = orders.find(x => x.id === activeOrderId); o.ca
 function updDisc(i, v) { const o = orders.find(x => x.id === activeOrderId); if(v === 'manual'){ const x = prompt("Disc Rp:"); if(x) o.cart[i].discVal = cleanNum(x); } o.cart[i].discMode = v; saveOrdersToLocal(); renderCart(); }
 
 async function checkout(m) {
-    const o = orders.find(x => x.id === activeOrderId); if(!o || !o.cart.length) return alert("Cart Kosong");
-    const t = cleanNum(document.getElementById('val-total').innerText), d = cleanNum(document.getElementById('val-discount').innerText);
+    const o = orders.find(x => x.id === activeOrderId); 
+    if(!o || !o.cart.length) return alert("Cart Kosong");
+
+    const t = cleanNum(document.getElementById('val-total').innerText);
+    const d = cleanNum(document.getElementById('val-discount').innerText);
     let cIn = 0, tips = 0, change = 0;
     
     if(m === 'CASH'){ 
-        const p = prompt(`Tagihan: ${fmtRp(t)}\n\nMasukkan Uang Tunai:`); if(p === null) return; 
-        cIn = cleanNum(p); if(cIn < t) return alert(`Kurang: ${fmtRp(t - cIn)}`); 
+        const p = prompt(`Tagihan: ${fmtRp(t)}\n\nMasukkan Uang Tunai:`); 
+        if(p === null) return; 
+        cIn = cleanNum(p); 
+        if(cIn < t) return alert(`Kurang: ${fmtRp(t - cIn)}`); 
+        
         let rawChange = cIn - t; 
-        const ti = prompt(`Kembalian: ${fmtRp(rawChange)}\n\nMasukkan TIPS (0 jika tidak ada):`, "0"); if(ti === null) return; 
-        tips = cleanNum(ti); change = rawChange - tips; if(change < 0) return alert("Tips > Kembalian");
+        const ti = prompt(`Kembalian: ${fmtRp(rawChange)}\n\nMasukkan TIPS (0 jika tidak ada):`, "0"); 
+        if(ti === null) return; 
+        tips = cleanNum(ti); 
+        change = rawChange - tips; 
+        if(change < 0) return alert("Tips tidak boleh lebih besar dari kembalian!");
     } else { 
-        const p = prompt(`Total Tagihan: ${fmtRp(t)}\n\nMasukkan Total yang dibayar via QRIS:`); if(p === null) return; 
-        cIn = cleanNum(p); if(cIn < t) return alert("Kurang!"); 
-        tips = cIn - t; change = 0; if(tips > 0){ if(!confirm(`Kelebihan ${fmtRp(tips)} dianggap TIPS?`)) return; }
+        const p = prompt(`Total Tagihan: ${fmtRp(t)}\n\nMasukkan Total yang dibayar via QRIS:`); 
+        if(p === null) return; 
+        cIn = cleanNum(p); 
+        if(cIn < t) return alert("Pembayaran Kurang!"); 
+        
+        tips = cIn - t; 
+        change = 0; 
+        if(tips > 0){ 
+            if(!confirm(`Kelebihan ${fmtRp(tips)} dianggap TIPS?`)) return; 
+        }
     }
     
-    setStatus('saving'); document.getElementById('loading-overlay').classList.remove('hidden');
+    const payloadData = { 
+        header: {
+            branchId: getSelectedBranch(), 
+            tanggal: getLocalDate(), 
+            jamIn: o.timeIn, 
+            jamOut: new Date().getHours().toString().padStart(2,'0') + ":" + new Date().getMinutes().toString().padStart(2,'0'), 
+            customer: o.custName || "Guest", 
+            wa: o.wa, 
+            visitType: o.type, 
+            total: t + d, 
+            grandTotal: t, 
+            discount: d, 
+            tips: tips, 
+            method: m, 
+            cashIn: cIn, 
+            change: change, 
+            note: o.note,
+            offlineId: "OFF-" + new Date().getTime() 
+        }, 
+        items: o.cart 
+    };
+
+    setStatus('saving'); 
+    document.getElementById('loading-overlay').classList.remove('hidden');
+
     try {
-        const payloadData = { header: {branchId: getSelectedBranch(), tanggal: getLocalDate(), jamIn: o.timeIn, jamOut: new Date().getHours().toString().padStart(2,'0') + ":" + new Date().getMinutes().toString().padStart(2,'0'), customer: o.custName || "Guest", wa: o.wa, visitType: o.type, total: t + d, grandTotal: t, discount: d, tips: tips, method: m, cashIn: cIn, change: change, note: o.note}, items: o.cart };
-        const req = await fetch(API_URL, {method: "POST", body: JSON.stringify({action: "save_transaksi", payload: payloadData})}); 
+        const req = await fetch(API_URL, {
+            method: "POST", 
+            body: JSON.stringify({action: "save_transaksi", payload: payloadData})
+        }); 
         const res = await req.json();
         
         if(res.status) { 
-            setStatus('saved'); payloadData.header.id = res.data.newID; 
-            if(confirm("Transaksi berhasil! Cetak Struk?")) printReceipt(payloadData); else alert("Data disimpan!");
-            orders = orders.filter(x => x.id !== activeOrderId); 
-            activeOrderId = orders.length ? orders[0].id : null; 
-            saveOrdersToLocal(); renderOrderTabs(); checkBlankState(); loadMaster(); 
-            if(activeOrderId) loadActiveOrder();
+            setStatus('saved'); 
+            payloadData.header.id = res.data.newID;
+            finalizeTransaction(payloadData, true);
         } else { 
-            setStatus('error'); alert(res.message); 
+            throw new Error(res.message); 
         }
-    } catch(e){ setStatus('error'); alert(e); } 
+
+    } catch(e) { 
+        console.log("Offline Checkout: Menyimpan ke antrian...");
+        
+        try {
+            let queue = JSON.parse(localStorage.getItem('guts_trx_queue') || "[]");
+            
+            if (queue.length > 50) {
+                alert("MEMORI PENUH! Harap Online dulu untuk sinkronisasi data sebelum lanjut.");
+                document.getElementById('loading-overlay').classList.add('hidden');
+                return;
+            }
+
+            queue.push(payloadData);
+            localStorage.setItem('guts_trx_queue', JSON.stringify(queue));
+            
+            setStatus('offline');
+            alert("OFFLINE MODE: Transaksi disimpan di HP. Data akan terkirim otomatis saat Online.");
+            
+            payloadData.header.id = payloadData.header.offlineId;
+            finalizeTransaction(payloadData, false);
+
+        } catch (errStorage) {
+            alert("GAGAL SIMPAN OFFLINE: Memori Browser Penuh! Hapus history atau segera online.");
+        }
+    } 
     document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+function finalizeTransaction(data, isOnline) {
+    if(confirm("Transaksi Berhasil! Cetak Struk?")) printReceipt(data);
+    
+    orders = orders.filter(x => x.id !== activeOrderId); 
+    activeOrderId = orders.length ? orders[0].id : null; 
+    
+    saveOrdersToLocal(); 
+    renderOrderTabs(); 
+    checkBlankState(); 
+    
+    if(isOnline) loadMaster(); 
+    
+    if(activeOrderId) loadActiveOrder();
 }
 
 async function loadDailyDashboard() {
@@ -1391,53 +1472,76 @@ async function syncOrderCounter() {
 }
 
 async function processOfflineQueue() {
-    const rawQueue = localStorage.getItem('guts_absen_queue');
-    if (!rawQueue) return;
-
-    let queue = JSON.parse(rawQueue);
-    if (queue.length === 0) return;
+    const rawAbsen = localStorage.getItem('guts_absen_queue');
+    const rawTrx = localStorage.getItem('guts_trx_queue');
+    
+    if (!rawAbsen && !rawTrx) return;
 
     setStatus('saving');
-    const notif = document.createElement('div');
-    notif.id = 'sync-notif';
-    notif.style.cssText = "position:fixed; bottom:20px; right:20px; background:#f39c12; color:black; padding:10px 20px; border-radius:50px; z-index:9999; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.3);";
-    notif.innerHTML = `<i class="fas fa-sync fa-spin"></i> Mengirim ${queue.length} data offline...`;
-    document.body.appendChild(notif);
 
-    let failedQueue = [];
+    let absenQueue = JSON.parse(rawAbsen || "[]");
+    let pendingAbsen = [];
 
-    for (let item of queue) {
-        try {
-            const req = await fetch(API_URL, {
-                method: "POST",
-                body: JSON.stringify({ action: "save_absensi", payload: item })
-            });
-            const res = await req.json();
-            
-            if (!res.status) {
-                console.log("Sync ditolak server:", res.message);
-            } else {
-                console.log("Sync Sukses:", item.nama);
+    if (absenQueue.length > 0) {
+        console.log(`Syncing ${absenQueue.length} data absen...`);
+        for (let item of absenQueue) {
+            try {
+                await fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "save_absensi", payload: item })
+                });
+            } catch (e) {
+                pendingAbsen.push(item);
             }
-        } catch (e) {
-            failedQueue.push(item);
-            console.log("Sync Gagal (Masih Offline):", item.nama);
         }
+        if (pendingAbsen.length > 0) localStorage.setItem('guts_absen_queue', JSON.stringify(pendingAbsen));
+        else localStorage.removeItem('guts_absen_queue');
     }
 
-    if (failedQueue.length > 0) {
-        localStorage.setItem('guts_absen_queue', JSON.stringify(failedQueue));
-        notif.style.background = "var(--red)";
-        notif.style.color = "white";
-        notif.innerHTML = `<i class="fas fa-wifi"></i> Koneksi putus lagi. Sisa ${failedQueue.length} data.`;
-    } else {
-        localStorage.removeItem('guts_absen_queue'); // Bersih
-        notif.style.background = "var(--green)";
-        notif.style.color = "white";
-        notif.innerHTML = `<i class="fas fa-check"></i> Semua data offline terkirim!`;
+    let trxQueue = JSON.parse(rawTrx || "[]");
+    let pendingTrx = [];
+
+    if (trxQueue.length > 0) {
+        console.log(`Syncing ${trxQueue.length} transaksi...`);
+        
+        const notif = document.createElement('div');
+        notif.id = 'sync-notif';
+        notif.style.cssText = "position:fixed; bottom:20px; right:20px; background:#e67e22; color:white; padding:10px 20px; border-radius:50px; z-index:9999; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.3); transition:all 0.3s;";
+        notif.innerHTML = `<i class="fas fa-sync fa-spin"></i> Mengirim ${trxQueue.length} Transaksi Offline...`;
+        document.body.appendChild(notif);
+
+        for (let item of trxQueue) {
+            try {
+                const req = await fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "save_transaksi", payload: item })
+                });
+                const res = await req.json();
+                
+                if (!res.status) console.warn("Transaksi ditolak server:", res.message);
+                
+            } catch (e) {
+                pendingTrx.push(item);
+                console.error("Sync Trx Gagal (Net Error):", e);
+            }
+        }
+
+        if (pendingTrx.length > 0) {
+            localStorage.setItem('guts_trx_queue', JSON.stringify(pendingTrx));
+            
+            notif.style.background = "var(--red)";
+            notif.innerHTML = `<i class="fas fa-wifi"></i> Gagal kirim sebagian. Sisa ${pendingTrx.length} data.`;
+        } else {
+            localStorage.removeItem('guts_trx_queue');
+            
+            notif.style.background = "var(--green)";
+            notif.innerHTML = `<i class="fas fa-check"></i> Semua Transaksi Terkirim!`;
+            
+            loadDailyDashboard();
+        }
+
+        setTimeout(() => { if(notif) notif.remove(); }, 3000);
     }
 
     setStatus('saved');
-    
-    setTimeout(() => { if(notif) notif.remove(); }, 3000);
 }
