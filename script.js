@@ -1,11 +1,5 @@
-/* =================================================================
-   GUTS POS SYSTEM - LOGIC FRONTEND (FULL REPAIR)
-   ================================================================= */
-
-// --- PENTING: PASTE URL WEB APP ANDA DI SINI ---
 const API_URL = "https://script.google.com/macros/s/AKfycbwTppW9MbmNya1OiYJFVZjj4TertTzrGoe4KuuTegb0M5I2WJy5SIIDJJT8MC8xVjDIRw/exec"; 
 
-// --- GLOBAL VARIABLES ---
 let currentUser = null;
 let currentShift = null; 
 let masterData = { produk: [], karyawan: [], promo: [], coa: [] };
@@ -57,31 +51,28 @@ function setStatus(state) {
 
 // --- INITIALIZATION ---
 window.onload = () => {
-    // 1. Cek Offline/Online Status
     if(!navigator.onLine) setStatus('offline');
     
     window.addEventListener('offline', () => setStatus('offline'));
     
-    // --- PERUBAHAN DI SINI ---
     window.addEventListener('online', () => {
-        setStatus('saved');     // Ubah indikator jadi hijau
-        processOfflineQueue();  // Kirim data yang nyangkut di memori HP
+        setStatus('saved');
+        processOfflineQueue();
     });
-    // -------------------------
 
-    // Cek antrian juga saat pertama kali aplikasi dibuka (siapa tahu ada sisa kemarin)
     processOfflineQueue();
 
-    // 2. Cek Login User
     const saved = localStorage.getItem('guts_user');
     if(saved) { 
         try { 
             currentUser = JSON.parse(saved); 
-            performLoginCheck(); 
-        } catch(e) { localStorage.clear(); } 
+            performLoginCheck();
+        } catch(e) { 
+            console.error("Data user corrupt, minta login ulang.");
+            localStorage.removeItem('guts_user');
+        } 
     }
 
-    // 3. Load Local Data (Cart)
     const savedCount = localStorage.getItem('guts_order_counter'); 
     if(savedCount) orderCounter = parseInt(savedCount);
     
@@ -90,20 +81,21 @@ window.onload = () => {
         try { 
             orders = JSON.parse(savedOrders); 
             if(orders.length > 0 && !activeOrderId) activeOrderId = orders[0].id; 
-        } catch(e){ orders=[]; } 
+        } catch(e){ 
+            console.error("Data order corrupt.");
+            orders = []; 
+        } 
     }
     
-    checkBlankState(); 
-    if(activeOrderId) loadActiveOrder(); 
+    checkBlankState();
+    if(activeOrderId) loadActiveOrder();
 
-    // 4. Clock Tick
     setInterval(() => { 
         const el = document.getElementById('time-in-display'); 
         if(el) el.innerText = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}); 
     }, 1000);
 };
 
-// --- AUTH & SHIFT ---
 async function performLogin() {
     const u = document.getElementById('username').value;
     const p = document.getElementById('password').value;
@@ -111,7 +103,7 @@ async function performLogin() {
     
     if(!u || !p) return alert("Isi Username & Password!");
 
-    btn.innerText = "Checking..."; btn.disabled = true;
+    btn.innerText = "Verifying..."; btn.disabled = true;
 
     try {
         const req = await fetch(API_URL, {
@@ -123,17 +115,37 @@ async function performLogin() {
         if (res.status) { 
             currentUser = res.data; 
             localStorage.setItem('guts_user', JSON.stringify(currentUser)); 
+            
             performLoginCheck();
-        } else alert(res.message);
-    } catch(e){ alert("Err: " + e); } 
+        } else {
+            alert(res.message);
+        }
+    } catch(e){ 
+        console.log("Login Online Gagal. Mencoba Login Offline...");
+        
+        const cachedUserStr = localStorage.getItem('guts_user');
+        
+        if (cachedUserStr) {
+            const cachedUser = JSON.parse(cachedUserStr);
+            
+            if (u === cachedUser.Username) {
+                currentUser = cachedUser;
+                alert("Login Mode Offline Berhasil.");
+                performLoginCheck();
+            } else {
+                alert("Offline: Username tidak cocok dengan data terakhir di HP ini.");
+            }
+        } else {
+            alert("Gagal Login (Offline). Anda harus Online untuk login pertama kali.");
+        }
+    } 
     btn.innerText = "LOGIN"; btn.disabled = false;
 }
 
-/* --- LOGIN CHECK: LOCAL + SERVER RESTORE --- */
 async function performLoginCheck() {
-    // 1. Cek Local Storage (Cara Lama)
     const savedShift = localStorage.getItem('guts_shift_' + currentUser.Username);
     if(savedShift) {
+        console.log("Offline Login: Menggunakan sesi lokal.");
         currentShift = JSON.parse(savedShift);
         showDashboard();
         return;
@@ -159,17 +171,23 @@ async function performLoginCheck() {
                 startTime: res.data.startTime 
             };
             localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
-            
-            alert("Sesi Shift dipulihkan dari server.");
+            alert("Sesi dipulihkan dari server.");
             showDashboard();
         } else {
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('modal-open-shift').classList.remove('hidden');
         }
     } catch(e) {
-        alert("Gagal cek sesi server (Offline). Silakan Buka Toko manual.");
-        document.getElementById('login-page').classList.add('hidden');
-        document.getElementById('modal-open-shift').classList.remove('hidden');
+        console.log("Gagal konek server (Offline). Cek data lokal...");
+        const hasMasterData = localStorage.getItem('guts_master_cache');
+        
+        if (hasMasterData) {
+            alert("Mode Offline Aktif. Data akan disinkronkan nanti.");
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('modal-open-shift').classList.remove('hidden');
+        } else {
+            alert("Anda sedang Offline & belum ada data tersimpan. Harap online untuk login pertama kali.");
+        }
     }
     
     if(btn) btn.innerText = "LOGIN";
@@ -247,47 +265,39 @@ function showDashboard() {
     if(orders.length === 0) loadDailyDashboard();
 }
 
-/* --- FUNGSI UPDATE ALAMAT SIDEBAR --- */
 function updateSidebarAddress() {
-    const branch = getSelectedBranch(); // Ambil cabang yang aktif
+    const branch = getSelectedBranch()
     const el = document.getElementById('user-address-display');
     
     if (!el) return;
 
     let addr = "";
 
-    // Logika Alamat (Sama persis dengan Receipt)
     if (branch === 'Cimahi') {
         addr = "Jl. Jend. H. Amir Machmud No.654, Cimahi<br>Kec. Cimahi Tengah, Kota Cimahi";
     } else {
-        // Default (Leuwigajah / HO)
         addr = "Jl. Kerkof No.23, Leuwigajah<br>Kec. Cimahi Selatan, Kota Cimahi";
     }
 
     el.innerHTML = addr; // Gunakan innerHTML agar <br> terbaca sebagai enter
 }
 
-// --- DATA MASTER & DROPDOWNS ---
 async function loadMaster() {
     const CACHE_KEY = 'guts_master_cache';
     try { 
-        // 1. Coba Tarik Data Online
         const req = await fetch(API_URL, {method: "POST", body: JSON.stringify({action: "get_master_data", payload: {}})}); 
         const res = await req.json(); 
         if(res.status){ 
             masterData = res.data; 
-            // SIMPAN KE MEMORI (Untuk cadangan kalau offline)
             localStorage.setItem(CACHE_KEY, JSON.stringify(masterData));
             initDropdowns(); 
         } 
     } catch(e){ 
         console.log("Offline Mode: Mengambil Data lokal...");
-        // 2. Jika Gagal (Offline)
         const cached = localStorage.getItem(CACHE_KEY);
         if(cached) {
             masterData = JSON.parse(cached);
             initDropdowns();
-            // Beri tahu user pakai data lama
             const sel = document.getElementById('sync-status');
             if(sel) { sel.style.color = 'orange'; sel.innerText = 'Offline Mode (Data lokal)'; }
         } else {
@@ -297,7 +307,6 @@ async function loadMaster() {
 }
 
 function initDropdowns() {
-    // 1. Reset HTML
     const svc = document.getElementById('service-dropdown');
     const sty = document.getElementById('stylist-dropdown');
     const prd = document.getElementById('product-dropdown');
@@ -305,7 +314,6 @@ function initDropdowns() {
     const stk = document.getElementById('restock-sku');
     const abs = document.getElementById('absen-nama');
     
-    // 2. Build Options
     let hSvc = '<option value="">-- Pilih Jasa --</option>';
     let hPrd = '<option value="">-- Pilih Produk --</option>';
     let hStk = '<option value="">-- Pilih Barang --</option>';
@@ -332,16 +340,14 @@ function initDropdowns() {
         });
     }
     
-    // 3. Populate
     if(svc) svc.innerHTML = hSvc;
     if(sty) sty.innerHTML = hSty;
     if(prd) prd.innerHTML = hPrd;
-    if(sel) sel.innerHTML = hSty; // Seller = Karyawan
+    if(sel) sel.innerHTML = hSty;
     if(stk) stk.innerHTML = hStk;
     if(abs) abs.innerHTML = hAbs;
 }
 
-// --- NAVIGATION ---
 function switchMenu(menuId) {
     document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active')); 
     const menus = document.querySelectorAll('.menu-item');
@@ -365,7 +371,6 @@ function switchMenu(menuId) {
     }
 }
 
-// --- POS SYSTEM ---
 function addNewOrderTab() { 
     if(activeOrderId) saveCurrentState(); 
     
@@ -383,7 +388,7 @@ function addNewOrderTab() {
         custName: "", wa: "", type: "WALK-IN", 
         timeIn: now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0'), 
         note: "",
-        // Inisialisasi Dropdown Kosong untuk Order Baru
+
         savedStylist: "", 
         savedService: "", 
         savedSeller: "", 
@@ -393,7 +398,6 @@ function addNewOrderTab() {
     activeOrderId = newId; 
     saveOrdersToLocal(); renderOrderTabs(); checkBlankState(); 
     
-    // Load halaman kosong ini ke layar
     loadActiveOrder(); 
 }
 
@@ -401,7 +405,6 @@ function saveCurrentState() {
     if(!activeOrderId) return; 
     const o = orders.find(x => x.id === activeOrderId); 
     if(o){ 
-        // Simpan Input Teks
         o.custName = document.getElementById('cust-name').value; 
         o.wa = document.getElementById('cust-wa').value; 
         o.type = document.getElementById('visit-type').value; 
@@ -421,7 +424,6 @@ function loadActiveOrder() {
     const o = orders.find(x => x.id === activeOrderId); 
     if(!o) return; 
     
-    // 1. Load Input Teks
     document.getElementById('cust-name').value = o.custName || ""; 
     document.getElementById('cust-wa').value = o.wa || ""; 
     document.getElementById('visit-type').value = o.type || "WALK-IN"; 
@@ -461,14 +463,12 @@ function checkBlankState() {
     const ws = document.getElementById('pos-workspace');
     const bl = document.getElementById('pos-blank-state'); 
     if(orders.length === 0){ 
-        // Mode Kosong (Tidak ada tab)
         ws.classList.add('hidden'); 
         bl.classList.remove('hidden'); 
         loadDailyDashboard(); 
         renderCart(); 
     } 
     else { 
-        // Mode Ada Order
         ws.classList.remove('hidden'); 
         bl.classList.add('hidden'); 
     } 
@@ -536,11 +536,10 @@ function addToCart(item, styId, styName) {
     saveOrdersToLocal(); renderCart(); 
 }
 
-// --- FUNGSI RENDER CART YANG DIPERBAIKI ---
 function renderCart() { 
     const tb = document.getElementById('cart-items');
     if(!activeOrderId) {
-        tb.innerHTML = ''; // Hapus daftar item
+        tb.innerHTML = '';
         document.getElementById('val-gross').innerText = '0'; 
         document.getElementById('val-discount').innerText = '0'; 
         document.getElementById('val-total').innerText = '0'; 
@@ -634,7 +633,6 @@ async function checkout(m) {
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
-// --- DASHBOARD & REKAP ---
 async function loadDailyDashboard() {
     const tb = document.getElementById('daily-dashboard-tbody');
     const CACHE_KEY = 'guts_daily_cache_' + getSelectedBranch(); 
@@ -667,15 +665,9 @@ async function loadDailyDashboard() {
 function updateDailyStats(dataList) {
     if (!dataList) return;
 
-    // 1. Filter Data Bersih
     const validTrx = dataList.filter(x => x.status !== 'VOIDED' && !x.id.startsWith('VOID'));
-
-    // 2. Hitung Customer Real
     const totalCust = validTrx.length;
-
-    // 3. Hitung Omzet Real (Net Sales)
     const totalOmzet = validTrx.reduce((acc, curr) => acc + (parseFloat(curr.net) || 0), 0);
-
     const elCust = document.getElementById('val-total-cust-today');
     const elOmzet = document.getElementById('val-total-omzet-today');
 
@@ -691,11 +683,8 @@ function renderDailyTable(dataList) {
     
     let html = '';
     dataList.forEach(r => {
-        // Cek Status Void
         const isVoid = r.status === 'VOIDED';
         const isReversal = r.id.startsWith('VOID');
-
-        // Style: Jika Void, warna merah & dicoret
         const rowStyle = isVoid ? "text-decoration: line-through; color: #777;" : 
                          (isReversal ? "color: #777; font-style: italic;" : "cursor:pointer");
 
@@ -721,37 +710,30 @@ function showTrxDetail(encodedData) {
     document.getElementById('trx-detail-modal').classList.remove('hidden'); 
     document.getElementById('modal-trx-id').innerText = r.id;
     
-    // CEK STATUS: Apakah ini transaksi BATAL atau HASIL BATAL?
-    const isVoided = (r.status === 'VOIDED');      // Transaksi asli yang sudah dibatalkan
-    const isVoidResult = r.id.includes('VOID');    // Transaksi minus (hasil pembatalan)
+    const isVoided = (r.status === 'VOIDED');
+    const isVoidResult = r.id.includes('VOID');
     
     const b = document.getElementById('modal-trx-body'); 
     let html = ''; 
     
-    // Render Items
     let items = []; 
     try { items = JSON.parse(r.itemsRaw); items.forEach(i => { html += `<div class="detail-item"><div><b>${i.name}</b> x${i.qty}<br><small>${i.stylistName}</small></div><div align="right">${fmtRp(i.price * i.qty)}</div></div>`; }); } catch(e){}
     
-    // Render Total
     html += `<div style="margin-top:15px; border-top:1px solid #444; padding-top:10px;">
                 <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>${fmtRp(r.gross)}</span></div>
                 <div style="display:flex; justify-content:space-between; color:var(--red);"><span>Diskon:</span><span>${fmtRp(r.disc)}</span></div>
                 <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.1em; margin-top:5px;"><span>GRAND TOTAL:</span><span>${fmtRp(r.net)}</span></div>
              </div>`;
     
-    // LOGIKA TOMBOL (PENTING)
     if (isVoided) {
-        // Jika sudah divoid, tampilkan status merah, matikan semua tombol
         html += `<div style="margin-top:20px; background:rgba(231, 76, 60, 0.2); border:1px solid var(--red); color:var(--red); text-align:center; padding:10px; font-weight:bold; border-radius:4px;">
                     Transaksi sudah dibatalkan. (Void)
                  </div>`;
     } else if (isVoidResult) {
-        // Jika ini adalah struk minus (bukti void), matikan tombol juga
         html += `<div style="margin-top:20px; background:#333; color:#aaa; text-align:center; padding:10px; border-radius:4px; font-style:italic;">
                     Pembatalan Transaksi (Reversal)
                  </div>`;
     } else {
-        // Jika Transaksi Normal & Aktif -> Tampilkan Tombol
         html += `<button onclick="reprintOldTrx('${encodedData}')" style="width:100%; background:var(--accent); color:black; border:none; padding:10px; margin-top:15px; font-weight:bold; border-radius:4px; cursor:pointer;">
                     <i class="fas fa-print"></i> Cetak Ulang Receipt
                  </button>`;
@@ -766,15 +748,12 @@ function showTrxDetail(encodedData) {
 
 function closeModal(){ document.getElementById('trx-detail-modal').classList.add('hidden'); }
 
-// Fungsi untuk memproses data lama agar bisa masuk ke fungsi printReceipt yang sudah ada
 function reprintOldTrx(encodedData) {
     const r = JSON.parse(decodeURIComponent(encodedData));
-    
-    // Mapping data dari database agar sesuai format struk
     const trxData = {
         header: {
             branchId: r.branchId,
-            tanggal: r.tanggal, // Format YYYY-MM-DD
+            tanggal: r.tanggal,
             jamOut: r.jamOut,
             id: r.id,
             total: r.gross,
@@ -784,7 +763,7 @@ function reprintOldTrx(encodedData) {
             method: r.method,
             cashIn: r.cashIn,
             change: r.change,
-            note: "Cetak Ulang (Copy)" // Penanda di struk
+            note: "Cetak Ulang (Copy)"
         },
         items: []
     };
@@ -799,7 +778,6 @@ function reprintOldTrx(encodedData) {
     printReceipt(trxData);
 }
 
-// --- VOID & PRINT ---
 function requestVoid(id, gross, net, disc, tips, method, tanggal) {
     voidDataTemp = { oldId: id, gross, net, disc, tips, method, tanggal, branch: getSelectedBranch() };
     document.getElementById('trx-detail-modal').classList.add('hidden');
@@ -821,7 +799,6 @@ function printReceipt(trxData) {
     const branch = getSelectedBranch(); 
     let branchName = "", addr1 = "", addr2 = "";
     
-    // 1. Tentukan Header Cabang
     if (branch === 'Leuwigajah' || (branch === 'HO' && trxData.header.branchId === 'Leuwigajah')) { 
         branchName = "CABANG LEUWIGAJAH"; 
         addr1 = "Jl. Kerkof No.23, Leuwigajah"; 
@@ -833,10 +810,8 @@ function printReceipt(trxData) {
     }
     
     const fullDate = formatDateSimple(trxData.header.tanggal) + " " + trxData.header.jamOut;
-    // Ambil nama kapster unik
     const kapsterList = [...new Set(trxData.items.map(i => i.stylistName))].join(", ");
 
-    // 2. Render Item Belanjaan ke HTML
     let itemsHtml = '';
     trxData.items.forEach(item => { 
         itemsHtml += `
@@ -849,7 +824,6 @@ function printReceipt(trxData) {
         </div>`; 
     });
 
-    // 3. Susun Struk Baru (Menggantikan HTML lama yang dihapus)
     const strukHTML = `
         <div style="width: 58mm; font-size: 9pt; line-height: 1.3; color:black;">
             
@@ -899,9 +873,8 @@ function printReceipt(trxData) {
         </div>
     `;
 
-    // 4. Inject ke Container Print
     const printArea = document.getElementById('print-area');
-    printArea.innerHTML = strukHTML; // <--- Ini yang menggantikan elemen lama
+    printArea.innerHTML = strukHTML;
     printArea.style.display = 'block'; 
     
     setTimeout(() => { 
@@ -910,7 +883,6 @@ function printReceipt(trxData) {
     }, 500);
 }
 
-// --- JURNAL, STOCK, KAPSTER ---
 function initJournalView() { 
     document.getElementById('journal-date').value = getLocalDate(); journalItems = []; renderJournalRows(); 
     loadJournalHistory(); 
@@ -959,7 +931,6 @@ function renderJournalRows() {
     calcJ();
 }
 
-// Helper kecil untuk menampilkan angka di input saat render ulang (tanpa Rp)
 function fmtRpNoRp(n) { return new Intl.NumberFormat('id-ID').format(n); }
 
 function searchAkun(el, i) {
@@ -967,8 +938,6 @@ function searchAkun(el, i) {
     const d = document.getElementById(`res-${i}`); 
     d.innerHTML = '';
     
-    // Filter dari Master Data COA
-    // Menampilkan maksimal 10 hasil agar tidak terlalu panjang
     const m = masterData.coa.filter(c => c.Kode_Akun.includes(q) || c.Nama_Akun.toLowerCase().includes(q));
     
     if (m.length) { 
@@ -976,18 +945,15 @@ function searchAkun(el, i) {
         m.forEach(c => { 
             const x = document.createElement('div'); 
             x.className = 'search-item'; 
-            // Tampilan: Kode (Tebal) - Nama Akun
             x.innerHTML = `<span style="font-weight:bold; color:var(--accent)">${c.Kode_Akun}</span> - ${c.Nama_Akun}`; 
             
-            // Saat dipilih
             x.onclick = () => { 
                 journalItems[i].akun = `${c.Kode_Akun} - ${c.Nama_Akun}`; 
-                renderJournalRows(); // Render ulang agar input terisi dan dropdown hilang
+                renderJournalRows();
             }; 
             d.appendChild(x); 
         }); 
     } else { 
-        // Jika tidak ada hasil tapi user mengetik, beri info
         if(q.length > 0) {
             d.classList.remove('hidden');
             d.innerHTML = '<div class="search-item" style="color:#777; cursor:default;">Tidak ditemukan</div>';
@@ -997,7 +963,6 @@ function searchAkun(el, i) {
     }
 }
 
-// Event Listener Global: Klik di luar untuk menutup dropdown
 document.addEventListener('click', function(e) { 
     if (!e.target.classList.contains('input-akun')) {
         document.querySelectorAll('.search-results').forEach(el => el.classList.add('hidden')); 
@@ -1030,8 +995,8 @@ async function loadJournalHistory() {
                 payload: { 
                     branch: getSelectedBranch(), 
                     category: document.getElementById('journal-category').value,
-                    startDate: startDate, // Kirim Tanggal Awal
-                    endDate: endDate      // Kirim Tanggal Akhir
+                    startDate: startDate,
+                    endDate: endDate
                 }
             })
         }); 
@@ -1093,33 +1058,22 @@ async function refreshStock() {
     const btn = document.querySelector('#view-stock .content-header button');
     const originalText = btn.innerHTML;
     
-    // Ubah tombol jadi loading
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
     btn.disabled = true;
     
     try {
-        // 1. Tarik Data Terbaru dari Server
         await loadMaster(); 
         
-        // 2. Render Ulang Tabel
         renderStockView(); 
-        
-        // Notifikasi visual (opsional)
-        // btn.style.background = "var(--green)";
-        // setTimeout(() => btn.style.background = "var(--accent)", 1000);
         
     } catch (e) {
         alert("Gagal refresh stok: " + e);
     }
     
-    // Kembalikan tombol seperti semula
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
 
-/* =================================================================
-   UPDATE: KAPSTER REPORT (GRID VIEW PREMIUM - RANK SORTED)
-   ================================================================= */
 async function loadKapsterReport() {
     const container = document.getElementById('kapster-report-container'); 
     container.className = 'kapster-grid';
@@ -1147,22 +1101,18 @@ async function loadKapsterReport() {
         let html = ''; 
         if (res.data.length) { 
             
-            // 1. SORTING (Tetap ranking kinerja tertinggi di kiri)
             res.data.sort((a, b) => (b.totalCust + b.prodQty) - (a.totalCust + a.prodQty));
 
-            // 2. RENDER CARD
             res.data.forEach((k, index) => { 
                 const rank = index + 1;
                 
                 let rankClass = (rank === 1) ? 'rank-1' : '';
                 let profileDisplay = '';
                 
-                // 1. Siapkan Icon Cadangan (Default)
                 const fallbackIcon = (rank === 1) 
                     ? `<i class="fas fa-crown fa-3x" style="color:#f1c40f; filter:drop-shadow(0 0 5px gold);"></i>`
                     : `<i class="fas fa-user-circle fa-3x" style="color:#555;"></i>`;
 
-                // 2. Cek apakah ada link foto yang valid (diawali http)
                 if (k.foto && k.foto.startsWith('http')) {
                     profileDisplay = `
                     <div class="profile-wrapper" style="width:60px; height:60px;">
@@ -1241,7 +1191,6 @@ async function loadKapsterReport() {
     }
 }
 
-// --- PRESENSI (CAM & SHIFT) - UPDATED ---
 function autoSelectShift() {
     const selName = document.getElementById('absen-nama'); 
     const selShift = document.getElementById('absen-shift');
@@ -1260,7 +1209,7 @@ let fotoAbsenBase64 = null;
 
 async function startCamera() {
     const video = document.getElementById('camera-feed');
-    const placeholder = document.getElementById('camera-placeholder'); // <--- FIX: Ambil elemen placeholder
+    const placeholder = document.getElementById('camera-placeholder');
     
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return alert("Browser tidak support kamera!");
     
@@ -1268,12 +1217,10 @@ async function startCamera() {
         streamKamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }); 
         video.srcObject = streamKamera; 
         
-        // UPDATE UI: Tampilkan Video, Sembunyikan Placeholder
-        video.style.display = 'block';              // Munculkan Video
-        placeholder.style.display = 'none';         // <--- FIX: Sembunyikan Tulisan "Kamera Mati"
-        document.getElementById('camera-result').style.display = 'none'; // Sembunyikan hasil foto lama
+        video.style.display = 'block';
+        placeholder.style.display = 'none';
+        document.getElementById('camera-result').style.display = 'none';
         
-        // UPDATE BUTTONS
         document.getElementById('btn-start-cam').style.display = 'none'; 
         document.getElementById('btn-snap').style.display = 'block'; 
         document.getElementById('btn-retake').style.display = 'none';
@@ -1297,28 +1244,24 @@ function takeSnapshot() {
 
     if(!streamKamera) return;
     
-    // Ambil Gambar
     canvas.width = 640; canvas.height = 480; 
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     fotoAbsenBase64 = canvas.toDataURL('image/jpeg', 0.5); 
     
-    // Tampilkan Hasil Foto
     img.src = fotoAbsenBase64; 
     img.style.display = 'block'; 
     video.style.display = 'none'; 
-    placeholder.style.display = 'none'; // Pastikan placeholder tetap sembunyi
+    placeholder.style.display = 'none';
     
-    // Update Button
     document.getElementById('btn-snap').style.display = 'none'; 
     document.getElementById('btn-retake').style.display = 'block'; 
     document.getElementById('btn-submit-absen').style.display = 'block'; 
     
-    stopCamera(); // Matikan stream agar hemat baterai/RAM
+    stopCamera();
 }
 
 function resetCamera() { 
     fotoAbsenBase64 = null; 
-    // UI Reset ditangani oleh startCamera()
     startCamera(); 
 }
 
@@ -1329,11 +1272,10 @@ async function submitAbsensi() {
 
     if(!nama || !fotoAbsenBase64) return alert("Data/Foto kurang!");
     
-    // 1. Kunci Tombol & Nyalakan Loading
     btnSubmit.disabled = true;
     btnSubmit.innerText = "Mengirim...";
     setStatus('saving'); 
-    document.getElementById('loading-overlay').classList.remove('hidden'); // LOADING ON
+    document.getElementById('loading-overlay').classList.remove('hidden');
 
     const payloadData = { 
         nama: nama, 
@@ -1343,13 +1285,11 @@ async function submitAbsensi() {
     };
     
     try {
-        // Coba kirim data
         const req = await fetch(API_URL, { 
             method: "POST", 
             body: JSON.stringify({ action: "save_absensi", payload: payloadData }) 
         });
 
-        // Cek jika server error (HTML return)
         const contentType = req.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
             throw new Error("Server Error (Backend Crash). Cek Deployment!");
@@ -1358,10 +1298,8 @@ async function submitAbsensi() {
         const res = await req.json();
         
         if(res.status) { 
-            // SUKSES ONLINE
             handleAbsenSuccess(res.data.status, res.data);
         } else { 
-            // DITOLAK SERVER (Misal: Duplikat)
             setStatus('saved'); 
             alert(res.message); 
             resetUiAbsen();
@@ -1370,12 +1308,10 @@ async function submitAbsensi() {
     } catch(e) { 
         console.error("Absen Error:", e);
 
-        // Jika Server Crash (Bukan Sinyal), Beri Tahu User
         if(e.message.includes("Server Error")) {
             alert("Terjadi Kesalahan di Server (Backend). Hubungi Admin.");
             resetUiAbsen();
         } else {
-            // OFFLINE MODE (Sinyal Hilang)
             console.log("Offline Mode Active. Simpan data di local storage...");
             let queue = JSON.parse(localStorage.getItem('guts_absen_queue') || "[]");
             queue.push(payloadData);
@@ -1387,24 +1323,18 @@ async function submitAbsensi() {
         }
 
     } finally {
-        // --- BAGIAN INI PASTI JALAN (SUKSES/GAGAL/ERROR) ---
-        // 1. Matikan Loading Overlay
         document.getElementById('loading-overlay').classList.add('hidden'); 
         
-        // 2. Kembalikan Tombol (Jaga-jaga jika UI tidak reset)
         btnSubmit.disabled = false;
         btnSubmit.innerHTML = '<i class="fas fa-paper-plane"></i> KIRIM PRESENSI';
     }
 }
 
-// UPDATE: Menambahkan parameter 'data' (opsional) untuk menangani detail denda
 function handleAbsenSuccess(statusMsg, data = null) {
     setStatus('saved');
     
     let pesan = `Presensi Berhasil!\nStatus: ${statusMsg}`;
     
-    // Hanya tampilkan detail denda JIKA data tersedia (Mode Online)
-    // Jika Offline (data == null), bagian ini dilewati agar tidak error
     if (data && data.denda > 0) {
         pesan += `\n\nTerlambat: ${data.late} Menit`;
         pesan += `\nDenda: Rp ${fmtRp(data.denda)}`;
@@ -1432,7 +1362,6 @@ async function syncOrderCounter() {
     const LOCAL_KEY = 'guts_last_counter_' + getLocalDate(); 
     
     try {
-        // 1. Coba Tanya Server (Mode Online)
         const req = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
@@ -1446,13 +1375,11 @@ async function syncOrderCounter() {
         const res = await req.json();
         
         if(res.status) {
-            // ONLINE: Update counter dari data real database
             orderCounter = res.data.nextIndex;
             localStorage.setItem(LOCAL_KEY, orderCounter);
             console.log("Counter synced (Online): Start from " + orderCounter);
         }
     } catch(e) {
-        // 2. OFFLINE / GAGAL: Cek Memori Terakhir
         console.log("Offline Mode: Mengambil counter dari memori...");
         const savedCount = localStorage.getItem(LOCAL_KEY);
         if (savedCount) {
@@ -1463,18 +1390,13 @@ async function syncOrderCounter() {
     }
 }
 
-/* =================================================================
-   OFFLINE SYNC MANAGER (PENGIRIMAN DATA TERTUNDA)
-   ================================================================= */
 async function processOfflineQueue() {
-    // 1. Cek apakah ada data tertunda
     const rawQueue = localStorage.getItem('guts_absen_queue');
     if (!rawQueue) return;
 
     let queue = JSON.parse(rawQueue);
     if (queue.length === 0) return;
 
-    // Jika ada data, beri notifikasi visual kecil
     setStatus('saving');
     const notif = document.createElement('div');
     notif.id = 'sync-notif';
@@ -1482,8 +1404,6 @@ async function processOfflineQueue() {
     notif.innerHTML = `<i class="fas fa-sync fa-spin"></i> Mengirim ${queue.length} data offline...`;
     document.body.appendChild(notif);
 
-    // 2. Loop dan Kirim Satu per Satu
-    // Kita gunakan array baru untuk menyimpan yang GAGAL dikirim (agar dicoba lagi nanti)
     let failedQueue = [];
 
     for (let item of queue) {
@@ -1495,19 +1415,16 @@ async function processOfflineQueue() {
             const res = await req.json();
             
             if (!res.status) {
-                // Jika ditolak server (misal duplikat), anggap selesai (jangan kirim ulang)
                 console.log("Sync ditolak server:", res.message);
             } else {
                 console.log("Sync Sukses:", item.nama);
             }
         } catch (e) {
-            // Jika masih error koneksi, simpan lagi untuk percobaan berikutnya
             failedQueue.push(item);
             console.log("Sync Gagal (Masih Offline):", item.nama);
         }
     }
 
-    // 3. Update LocalStorage
     if (failedQueue.length > 0) {
         localStorage.setItem('guts_absen_queue', JSON.stringify(failedQueue));
         notif.style.background = "var(--red)";
@@ -1522,6 +1439,5 @@ async function processOfflineQueue() {
 
     setStatus('saved');
     
-    // Hilangkan notifikasi setelah 3 detik
     setTimeout(() => { if(notif) notif.remove(); }, 3000);
 }
