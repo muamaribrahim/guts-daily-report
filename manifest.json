@@ -4,7 +4,7 @@
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#121212",
-  "theme_color": "#f1c40f",
+  "theme_color": "#e0e0e0",
   "icons": [
     {
       "src": "Square150x150Logo.scale-192",
@@ -17,4 +17,5 @@
       "type": "image/png"
     }
   ]
+
 }
