@@ -26,7 +26,15 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; 
+               overscroll-behavior-y: none;
+               user-select: none; 
+               -webkit-user-select: none; 
+               -webkit-tap-highlight-color: transparent; 
+               input, textarea {
+                   user-select: text !important; 
+                   -webkit-user-select: text !important; }  
+             }
         
         /* UTILITIES */
         .hidden { display: none !important; }
@@ -806,3 +814,4 @@
 </body>
 
 </html>
+
