@@ -65,7 +65,6 @@ window.onload = () => {
             try {
                 wakeLock = await navigator.wakeLock.request('screen');
                 console.log('Screen Wake Lock active (Layar dikunci agar tetap nyala)');
-                
                 document.addEventListener('visibilitychange', async () => {
                     if (wakeLock !== null && document.visibilityState === 'visible') {
                         wakeLock = await navigator.wakeLock.request('screen');
@@ -84,9 +83,7 @@ window.onload = () => {
     if(savedUser) { 
         if (isJustLogout) {
             console.log("Status: User habis logout manual. Stay di login page.");
-            
             localStorage.removeItem('guts_is_logout');
-            
         } else {
             try { 
                 currentUser = JSON.parse(savedUser); 
@@ -121,100 +118,88 @@ window.onload = () => {
 };
 
 async function performLogin() {
-    const u = document.getElementById('username').value;
-    const p = document.getElementById('password').value;
-    const btn = document.getElementById('btn-login');
+    const u = document.getElementById('login-user').value;
+    const p = document.getElementById('login-pass').value;
     
     if(!u || !p) return alert("Isi Username & Password!");
-
-    btn.innerText = "Verifying..."; btn.disabled = true;
+    const btn = document.querySelector('#login-screen button');
+    const oldText = btn.innerText;
+    btn.innerText = "Checking..."; btn.disabled = true;
 
     try {
         const req = await fetch(API_URL, {
             method: "POST",
-            body: JSON.stringify({ action: "login", payload: { username: u, password: p } })
+            body: JSON.stringify({ action: "login", username: u, password: p })
         });
         const res = await req.json();
+        if (res.status) {
+            currentUser = res.data;
+            localStorage.setItem('guts_user', JSON.stringify(currentUser));
+            localStorage.removeItem('guts_is_logout');
 
-        if (res.status) { 
-            currentUser = res.data; 
-            localStorage.setItem('guts_user', JSON.stringify(currentUser)); 
-            
             performLoginCheck();
+
         } else {
             alert(res.message);
         }
-    } catch(e){ 
-        console.log("Login Online Gagal. Mencoba Login Offline...");
-        
-        const cachedUserStr = localStorage.getItem('guts_user');
-        
-        if (cachedUserStr) {
-            const cachedUser = JSON.parse(cachedUserStr);
-            
-            if (u === cachedUser.Username) {
-                currentUser = cachedUser;
-                alert("Login Mode Offline Berhasil.");
-                performLoginCheck();
-            } else {
-                alert("Offline: Username tidak cocok dengan data terakhir di HP ini.");
-            }
-        } else {
-            alert("Gagal Login (Offline). Anda harus Online untuk login pertama kali.");
-        }
-    } 
-    btn.innerText = "LOGIN"; btn.disabled = false;
+    } catch (e) {
+        alert("Gagal Login (Cek Koneksi Internet): " + e.message);
+    }
+    btn.innerText = oldText; btn.disabled = false;
 }
 
 async function performLoginCheck() {
-    const savedShift = localStorage.getItem('guts_shift_' + currentUser.Username);
-    if(savedShift) {
-        console.log("Offline Login: Menggunakan sesi lokal.");
-        currentShift = JSON.parse(savedShift);
-        showDashboard();
+    document.getElementById('login-screen').classList.add('hidden');    
+    document.getElementById('loading-overlay').classList.remove('hidden');
+
+    const shiftKey = 'guts_shift_' + currentUser.Username;
+    const localShift = localStorage.getItem(shiftKey);
+    
+    if (localShift) {
+        console.log("Restore sesi shift dari Local Storage...");
+        currentShift = JSON.parse(localShift);
+        document.getElementById('user-display').innerText = currentUser.Fullname;
+        document.getElementById('branch-display').innerText = currentShift.branch;
+        document.getElementById('main-app').classList.remove('hidden');
+        document.getElementById('shift-screen').classList.add('hidden');
+        
+        loadDailyDashboard();
+        
+        document.getElementById('loading-overlay').classList.add('hidden');
         return;
     }
-
-    const btn = document.getElementById('btn-login');
-    if(btn) btn.innerText = "Checking Session...";
-
     try {
         const req = await fetch(API_URL, {
             method: "POST",
-            body: JSON.stringify({ 
-                action: "check_open_shift", 
-                payload: { user: currentUser.Username } 
-            })
+            body: JSON.stringify({ action: "check_shift", username: currentUser.Username })
         });
         const res = await req.json();
-        
-        if(res.status) {
-            currentShift = { 
-                id: res.data.shiftId, 
-                startBal: res.data.startBal, 
-                startTime: res.data.startTime 
+
+        if (res.status && res.data.status === 'OPEN') {
+            currentShift = {
+                branch: res.data.branch,
+                startTime: res.data.startTime,
+                modalAwal: res.data.modalAwal
             };
-            localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
-            alert("Sesi dipulihkan dari server.");
-            showDashboard();
+            localStorage.setItem(shiftKey, JSON.stringify(currentShift));
+            document.getElementById('user-display').innerText = currentUser.Fullname;
+            document.getElementById('branch-display').innerText = currentShift.branch;
+            document.getElementById('main-app').classList.remove('hidden');
+            document.getElementById('shift-screen').classList.add('hidden');
+            loadDailyDashboard();
         } else {
-            document.getElementById('login-page').classList.add('hidden');
-            document.getElementById('modal-open-shift').classList.remove('hidden');
+            console.log("Belum ada shift aktif. Menuju menu Buka Toko.");
+            document.getElementById('shift-screen').classList.remove('hidden');
+            document.getElementById('main-app').classList.add('hidden');
         }
-    } catch(e) {
-        console.log("Gagal konek server (Offline). Cek data lokal...");
-        const hasMasterData = localStorage.getItem('guts_master_cache');
+
+    } catch (e) {
+        console.log("Offline & No Local Shift. Default ke menu Buka Toko.");
         
-        if (hasMasterData) {
-            alert("Mode Offline Aktif. Data akan disinkronkan nanti.");
-            document.getElementById('login-page').classList.add('hidden');
-            document.getElementById('modal-open-shift').classList.remove('hidden');
-        } else {
-            alert("Anda sedang Offline & belum ada data tersimpan. Harap online untuk login pertama kali.");
-        }
+        document.getElementById('shift-screen').classList.remove('hidden');
+        document.getElementById('main-app').classList.add('hidden');
     }
-    
-    if(btn) btn.innerText = "LOGIN";
+    document.getElementById('loading-overlay').classList.add('hidden');
 }
 
 async function processOpenShift() {
@@ -275,6 +260,7 @@ function logout() {
         localStorage.removeItem('guts_shift_' + currentUser.Username);
     }
     localStorage.setItem('guts_is_logout', 'true');
+   // localStorage.removeItem('guts_user');
     location.reload(); 
 }
 
@@ -1629,5 +1615,6 @@ function hardResetApp() {
         window.location.reload(true);
     }
 }
+
 
 
