@@ -167,7 +167,9 @@ async function performLogin() {
 }
 
 async function performLoginCheck() {
-    document.getElementById('login-page').classList.add('hidden');
+    const loginPage = document.getElementById('login-page');
+    if (loginPage) loginPage.classList.add('hidden');
+    
     document.getElementById('loading-overlay').classList.remove('hidden');
 
     const shiftKey = 'guts_shift_' + currentUser.Username;
@@ -176,14 +178,22 @@ async function performLoginCheck() {
     
     if (localShift) {
         console.log("Restore sesi shift dari Local Storage...");
-        currentShift = JSON.parse(localShift);
-        
-        const elUser = document.getElementById('user-display');
-        if(elUser) elUser.innerText = currentUser.Fullname;
+        try {
+            currentShift = JSON.parse(localShift);
+            if (currentShift.startBal === undefined || currentShift.startBal === null) {
+                currentShift.startBal = 0;
+            }
+            
+            const elUser = document.getElementById('user-display');
+            if(elUser) elUser.innerText = currentUser.Fullname;
 
-        showDashboard();
-        document.getElementById('loading-overlay').classList.add('hidden');
-        return; 
+            showDashboard();
+            document.getElementById('loading-overlay').classList.add('hidden');
+            return;
+        } catch(e) {
+            console.error("Data lokal rusak, lanjut cek server...");
+            localStorage.removeItem(shiftKey);
+        }
     }
 
     try {
@@ -199,19 +209,19 @@ async function performLoginCheck() {
         if (res.status) {
             currentShift = { 
                 id: res.data.shiftId, 
-                startBal: res.data.startBal, 
+                startBal: res.data.startBal || 0,
                 startTime: res.data.startTime,
                 branch: res.data.branch 
             };
             localStorage.setItem(shiftKey, JSON.stringify(currentShift));
-            
             showDashboard();
+            
         } else {
             document.getElementById('modal-open-shift').classList.remove('hidden');
         }
 
     } catch (e) {
-        console.log("Offline & No Shift Data. Default to Open Shift.");
+        console.log("Offline & No Data. Default to Open Shift Mode.");
         document.getElementById('modal-open-shift').classList.remove('hidden');
     }
     
@@ -273,33 +283,77 @@ async function processOpenShift() {
 
 async function prepareCloseShift() {
     if(!currentShift) { logout(); return; }
+
     document.getElementById('loading-overlay').classList.remove('hidden');
+    
     try {
-        const req = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "get_monthly_rekap", payload: {branch: getSelectedBranch(), date: getLocalDate()} }) });
+        const req = await fetch(API_URL, { 
+            method: "POST", 
+            body: JSON.stringify({ 
+                action: "get_monthly_rekap", 
+                payload: {branch: getSelectedBranch(), date: getLocalDate()} 
+            }) 
+        });
         const res = await req.json();
-        const start = currentShift.startBal;
+        
+        const start = Number(currentShift.startBal) || 0; 
+        
         const todayData = res.data.rekap.find(r => r.date === getLocalDate()) || { cashIn: 0, pettyUsage: 0 };
-        const sysCalc = start + todayData.cashIn - todayData.pettyUsage;
+        
+        const sysCalc = start + (todayData.cashIn || 0) - (todayData.pettyUsage || 0);
         
         document.getElementById('disp-start-bal').innerText = fmtRp(start);
-        document.getElementById('disp-cash-in').innerText = fmtRp(todayData.cashIn);
-        document.getElementById('disp-cash-out').innerText = fmtRp(todayData.pettyUsage);
+        document.getElementById('disp-cash-in').innerText = fmtRp(todayData.cashIn || 0);
+        document.getElementById('disp-cash-out').innerText = fmtRp(todayData.pettyUsage || 0);
         document.getElementById('disp-sys-calc').innerText = fmtRp(sysCalc);
+        
         document.getElementById('modal-close-shift').dataset.sys = sysCalc;
+        
         document.getElementById('modal-close-shift').classList.remove('hidden');
-    } catch(e) { alert("Salah hitung: " + e); }
+        
+    } catch(e) { 
+        alert("Gagal hitung: " + e.message + "\n\nSistem akan logout paksa untuk reset.");
+        logout();
+    }
+    
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
 async function processCloseShift() {
     const endBal = cleanNum(document.getElementById('shift-end-bal').value);
-    const sysCalc = parseFloat(document.getElementById('modal-close-shift').dataset.sys);
-    if(confirm(`Saldo Cash hari ini: ${fmtRp(endBal)}\nSelisih: ${fmtRp(endBal - sysCalc)}\n\nReport hari ini sudah sesuai?`)) {
+    
+    let sysCalc = parseFloat(document.getElementById('modal-close-shift').dataset.sys);
+    if (isNaN(sysCalc)) sysCalc = 0;
+
+    const selisih = endBal - sysCalc;
+
+    if(confirm(`Saldo Cash: ${fmtRp(endBal)}\nSistem: ${fmtRp(sysCalc)}\nSelisih: ${fmtRp(selisih)}\n\nYakin tutup toko?`)) {
          setStatus('saving');
+         
          try {
-            await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "close_shift", payload: { shiftId: currentShift.id, endBal: endBal, systemCalc: sysCalc }}) });
-            setStatus('saved'); logout();
-        } catch(e) { setStatus('error'); alert(e); }
+            await fetch(API_URL, { 
+                method: "POST", 
+                body: JSON.stringify({ 
+                    action: "close_shift", 
+                    payload: { 
+                        shiftId: currentShift.id, 
+                        endBal: endBal, 
+                        systemCalc: sysCalc 
+                    }
+                }) 
+            });
+            
+            setStatus('saved'); 
+            
+            currentShift = null;
+            logout();
+
+        } catch(e) { 
+            setStatus('error'); 
+            if(confirm("Gagal kirim laporan (Offline). Tetap Logout? Data akan disinkronkan besok.")) {
+                logout();
+            }
+        }
     }
 }
 
@@ -308,7 +362,6 @@ function logout() {
         localStorage.removeItem('guts_shift_' + currentUser.Username);
     }
     localStorage.setItem('guts_is_logout', 'true');
-   // localStorage.removeItem('guts_user');
     location.reload(); 
 }
 
@@ -1672,6 +1725,7 @@ function hardResetApp() {
         window.location.reload(true);
     }
 }
+
 
 
 
