@@ -1,4 +1,4 @@
-const CACHE_NAME = 'guts-erp-v5'; 
+const CACHE_NAME = 'gutsERPsystem'; 
 
 const ASSETS_TO_CACHE = [
     './',
@@ -46,3 +46,4 @@ self.addEventListener('fetch', (e) => {
         })
     );
 });
+
