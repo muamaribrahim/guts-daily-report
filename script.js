@@ -13,7 +13,7 @@ let voidDataTemp = null;
 function getLocalDate() { const now = new Date(); const offset = now.getTimezoneOffset(); const local = new Date(now.getTime() - (offset*60*1000)); return local.toISOString().split('T')[0]; }
 function formatDateIndo(dateStr) { const d = new Date(dateStr); return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
 function formatDateSimple(dateStr) { const d = new Date(dateStr); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; }
-function fmtRp(n) { return new Intl.NumberFormat('id-ID').format(n); }
+function fmtRp(n) { return new Intl.NumberFormat('id-ID').format(number(n) || 0); }
 function cleanNum(str) { return parseInt(String(str).replace(/[^0-9-]/g, '')) || 0; }
 function formatInputRupiah(el) {
     let val = el.value.replace(/[^0-9]/g, '');
@@ -118,108 +118,157 @@ window.onload = () => {
 };
 
 async function performLogin() {
-    const u = document.getElementById('login-user').value;
-    const p = document.getElementById('login-pass').value;
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+    const btn = document.getElementById('btn-login');
     
     if(!u || !p) return alert("Isi Username & Password!");
-    const btn = document.querySelector('#login-screen button');
+
     const oldText = btn.innerText;
-    btn.innerText = "Checking..."; btn.disabled = true;
+    btn.innerText = "Verifying..."; btn.disabled = true;
 
     try {
         const req = await fetch(API_URL, {
             method: "POST",
-            body: JSON.stringify({ action: "login", username: u, password: p })
+            body: JSON.stringify({ action: "login", payload: { username: u, password: p } })
         });
         const res = await req.json();
+
         if (res.status) {
             currentUser = res.data;
             localStorage.setItem('guts_user', JSON.stringify(currentUser));
             localStorage.removeItem('guts_is_logout');
 
             performLoginCheck();
-
         } else {
             alert(res.message);
         }
     } catch (e) {
-        alert("Gagal Login (Cek Koneksi Internet): " + e.message);
+        console.log("Login Online Gagal. Mencoba Login Offline...");
+        
+        const cachedUserStr = localStorage.getItem('guts_user');
+        
+        if (cachedUserStr) {
+            const cachedUser = JSON.parse(cachedUserStr);
+            if (u === cachedUser.Username) {
+                currentUser = cachedUser;
+                localStorage.removeItem('guts_is_logout');
+                alert("Login Mode Offline Berhasil.");
+                performLoginCheck();
+            } else {
+                alert("Offline: Username tidak cocok dengan data terakhir di device ini.");
+            }
+        } else {
+            alert("Gagal Login (Offline). Anda harus Online untuk login pertama kali.");
+        }
     }
+
     btn.innerText = oldText; btn.disabled = false;
 }
 
 async function performLoginCheck() {
-    document.getElementById('login-screen').classList.add('hidden');    
+    document.getElementById('login-page').classList.add('hidden');
     document.getElementById('loading-overlay').classList.remove('hidden');
 
     const shiftKey = 'guts_shift_' + currentUser.Username;
+    
     const localShift = localStorage.getItem(shiftKey);
     
     if (localShift) {
         console.log("Restore sesi shift dari Local Storage...");
         currentShift = JSON.parse(localShift);
-        document.getElementById('user-display').innerText = currentUser.Fullname;
-        document.getElementById('branch-display').innerText = currentShift.branch;
-        document.getElementById('main-app').classList.remove('hidden');
-        document.getElementById('shift-screen').classList.add('hidden');
         
-        loadDailyDashboard();
-        
+        const elUser = document.getElementById('user-display');
+        if(elUser) elUser.innerText = currentUser.Fullname;
+
+        showDashboard();
         document.getElementById('loading-overlay').classList.add('hidden');
-        return;
+        return; 
     }
+
     try {
         const req = await fetch(API_URL, {
             method: "POST",
-            body: JSON.stringify({ action: "check_shift", username: currentUser.Username })
+            body: JSON.stringify({ 
+                action: "check_open_shift", 
+                payload: { user: currentUser.Username } 
+            })
         });
         const res = await req.json();
 
-        if (res.status && res.data.status === 'OPEN') {
-            currentShift = {
-                branch: res.data.branch,
+        if (res.status) {
+            currentShift = { 
+                id: res.data.shiftId, 
+                startBal: res.data.startBal, 
                 startTime: res.data.startTime,
-                modalAwal: res.data.modalAwal
+                branch: res.data.branch 
             };
             localStorage.setItem(shiftKey, JSON.stringify(currentShift));
-            document.getElementById('user-display').innerText = currentUser.Fullname;
-            document.getElementById('branch-display').innerText = currentShift.branch;
-            document.getElementById('main-app').classList.remove('hidden');
-            document.getElementById('shift-screen').classList.add('hidden');
-            loadDailyDashboard();
+            
+            showDashboard();
         } else {
-            console.log("Belum ada shift aktif. Menuju menu Buka Toko.");
-            document.getElementById('shift-screen').classList.remove('hidden');
-            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('modal-open-shift').classList.remove('hidden');
         }
 
     } catch (e) {
-        console.log("Offline & No Local Shift. Default ke menu Buka Toko.");
-        
-        document.getElementById('shift-screen').classList.remove('hidden');
-        document.getElementById('main-app').classList.add('hidden');
+        console.log("Offline & No Shift Data. Default to Open Shift.");
+        document.getElementById('modal-open-shift').classList.remove('hidden');
     }
+    
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
 async function processOpenShift() {
     const bal = cleanNum(document.getElementById('shift-start-bal').value);
-    if(!bal && bal !== 0) return alert("Isi saldo awal!");
+    
+    if(isNaN(bal)) return alert("Isi saldo awal");
+
     setStatus('saving');
+    
+    const newShiftData = {
+        branch: getSelectedBranch(), 
+        user: currentUser.Username, 
+        startBal: bal,
+        startTime: new Date().getTime()
+    };
+
     try {
         const req = await fetch(API_URL, {
             method: "POST", 
-            body: JSON.stringify({ action: "open_shift", payload: { branch: getSelectedBranch(), user: currentUser.Username, startBal: bal }})
+            body: JSON.stringify({ action: "open_shift", payload: newShiftData })
         });
         const res = await req.json();
+
         if(res.status) {
             setStatus('saved');
-            currentShift = { id: res.data.shiftId, startBal: bal, startTime: new Date().getTime() };
-            localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
-            document.getElementById('modal-open-shift').classList.add('hidden');
-            showDashboard();
-        } else { setStatus('error'); alert(res.message); }
-    } catch(e) { setStatus('error'); alert(e); }
+            currentShift = { 
+                id: res.data.shiftId,
+                startBal: bal, 
+                startTime: newShiftData.startTime,
+                branch: newShiftData.branch
+            };
+        } else {
+            throw new Error(res.message);
+        }
+
+    } catch(e) {
+        console.log("Open Shift Offline Mode");
+        setStatus('offline');
+        
+        currentShift = {
+            id: "OFF-SHIFT-" + new Date().getTime(),
+            startBal: bal,
+            startTime: newShiftData.startTime,
+            branch: newShiftData.branch,
+            isOffline: true
+        };
+        
+        alert("Buka Toko (Offline) Berhasil. Data tersimpan di device.");
+    }
+
+    localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
+    document.getElementById('modal-open-shift').classList.add('hidden');
+    showDashboard();
 }
 
 async function prepareCloseShift() {
@@ -238,7 +287,7 @@ async function prepareCloseShift() {
         document.getElementById('disp-sys-calc').innerText = fmtRp(sysCalc);
         document.getElementById('modal-close-shift').dataset.sys = sysCalc;
         document.getElementById('modal-close-shift').classList.remove('hidden');
-    } catch(e) { alert("Gagal hitung shift: " + e); }
+    } catch(e) { alert("Salah hitung: " + e); }
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
@@ -254,7 +303,6 @@ async function processCloseShift() {
     }
 }
 
-/* --- REVISI: LOGOUT AMAN (OFFLINE FRIENDLY) --- */
 function logout() { 
     if(currentUser && currentUser.Username) {
         localStorage.removeItem('guts_shift_' + currentUser.Username);
@@ -292,7 +340,7 @@ function updateSidebarAddress() {
         addr = "Jl. Kerkof No.23, Leuwigajah<br>Kec. Cimahi Selatan, Kota Cimahi";
     }
 
-    el.innerHTML = addr; // Gunakan innerHTML agar <br> terbaca sebagai enter
+    el.innerHTML = addr;
 }
 
 async function loadMaster() {
@@ -1514,7 +1562,7 @@ async function syncOrderCounter() {
         });
         const res = await req.json();
         
-        if(res.status) {
+        if(res.status && res.data) {
             orderCounter = res.data.nextIndex;
             localStorage.setItem(LOCAL_KEY, orderCounter);
             console.log("Counter synced (Online): Start from " + orderCounter);
@@ -1545,14 +1593,21 @@ async function processOfflineQueue() {
         console.log(`Syncing ${absenQueue.length} data absen...`);
         for (let item of absenQueue) {
             try {
-                await fetch(API_URL, {
+                const req = await fetch(API_URL, {
                     method: "POST",
                     body: JSON.stringify({ action: "save_absensi", payload: item })
                 });
+                
+                const res = await req.json();
+                
+                if (!res.status) throw new Error(res.message);
+
             } catch (e) {
+                console.error("Gagal sync absen:", e);
                 pendingAbsen.push(item);
             }
         }
+        
         if (pendingAbsen.length > 0) localStorage.setItem('guts_absen_queue', JSON.stringify(pendingAbsen));
         else localStorage.removeItem('guts_absen_queue');
     }
@@ -1577,11 +1632,13 @@ async function processOfflineQueue() {
                 });
                 const res = await req.json();
                 
-                if (!res.status) console.warn("Transaksi ditolak server:", res.message);
+                if (!res.status) {
+                    console.warn("Transaksi ditolak server:", res.message);
+                }
                 
             } catch (e) {
                 pendingTrx.push(item);
-                console.error("Sync Trx Gagal (Net Error):", e);
+                console.error("Sync Transaksi Gagal (Internet Error):", e);
             }
         }
 
@@ -1615,6 +1672,7 @@ function hardResetApp() {
         window.location.reload(true);
     }
 }
+
 
 
 
