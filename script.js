@@ -648,7 +648,17 @@ function renderCart() {
     tb.innerHTML = html; 
     document.getElementById('val-gross').innerText = fmtRp(tG); 
     document.getElementById('val-discount').innerText = fmtRp(tD); 
-    document.getElementById('val-total').innerText = fmtRp(tG - tD); 
+    document.getElementById('val-total').innerText = fmtRp(tG - tD);
+
+    const floatTotal = document.getElementById('float-total');
+    const floatCount = document.getElementById('float-count');
+    if(floatTotal && floatCount) {
+        floatTotal.innerText = fmtRp(tG - tD);
+        
+        let totalQty = 0;
+        if(o && o.cart) o.cart.forEach(x => totalQty += x.qty);
+        floatCount.innerText = totalQty + " Item";
+    }
 }
 
 function updQty(i, v) { const o = orders.find(x => x.id === activeOrderId); o.cart[i].qty += v; if(o.cart[i].qty <= 0) o.cart.splice(i, 1); saveOrdersToLocal(); renderCart(); }
@@ -1661,5 +1671,16 @@ function hardResetApp() {
     }
 }
 
+function toggleSidebar() {
+    const sb = document.getElementById('main-sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    sb.classList.toggle('active');
+    ov.classList.toggle('active');
+}
+
+function toggleCart() {
+    const cp = document.getElementById('mobile-cart-panel');
+    cp.classList.toggle('active');
+}
 
 
