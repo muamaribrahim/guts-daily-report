@@ -1,4 +1,4 @@
-const CACHE_NAME = 'GutsBarberandShop.v4'; 
+const CACHE_NAME = 'GutsBarberandShop.v5'; 
 
 const ASSETS_TO_CACHE = [
     './',
@@ -46,6 +46,7 @@ self.addEventListener('fetch', (e) => {
         })
     );
 });
+
 
 
 
