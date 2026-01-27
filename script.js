@@ -42,7 +42,7 @@ function setStatus(state) {
         el.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Menyimpan...</span>';
     } else if(state === 'error' || state === 'offline') {
         el.style.color = 'var(--red)';
-        el.innerHTML = '<i class="fas fa-wifi"></i> <span>OFFLINE / Gagal</span>';
+        el.innerHTML = '<i class="fas fa-wifi"></i> <span>OFFLINE / Periksa koneksi internet</span>';
     } else {
         el.style.color = 'var(--green)';
         el.innerHTML = '<i class="fas fa-check-circle"></i> <span>Ready</span>';
@@ -157,7 +157,7 @@ async function performLogin() {
                 alert("Login Mode Offline Berhasil.");
                 performLoginCheck();
             } else {
-                alert("Offline: Username tidak cocok dengan data terakhir di HP ini.");
+                alert("Offline: Username tidak cocok dengan data terakhir di perangkat ini.");
             }
         } else {
             alert("Gagal Login (Offline). Anda harus Online untuk login pertama kali.");
@@ -219,22 +219,53 @@ async function performLoginCheck() {
 
 async function processOpenShift() {
     const bal = cleanNum(document.getElementById('shift-start-bal').value);
-    if(!bal && bal !== 0) return alert("Isi saldo awal!");
+    if (isNaN(bal) || document.getElementById('shift-start-bal').value === '') return alert("Isi saldo awal!");
+
     setStatus('saving');
+    
+    const shiftData = {
+        branch: getSelectedBranch(),
+        user: currentUser.Username,
+        startBal: bal,
+        startTime: new Date().getTime()
+    };
+
     try {
         const req = await fetch(API_URL, {
-            method: "POST", 
-            body: JSON.stringify({ action: "open_shift", payload: { branch: getSelectedBranch(), user: currentUser.Username, startBal: bal }})
+            method: "POST",
+            body: JSON.stringify({ action: "open_shift", payload: shiftData })
         });
         const res = await req.json();
+        
         if(res.status) {
             setStatus('saved');
-            currentShift = { id: res.data.shiftId, startBal: bal, startTime: new Date().getTime() };
+            currentShift = { id: res.data.shiftId, startBal: bal, startTime: shiftData.startTime };
             localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
+            
             document.getElementById('modal-open-shift').classList.add('hidden');
             showDashboard();
-        } else { setStatus('error'); alert(res.message); }
-    } catch(e) { setStatus('error'); alert(e); }
+        } else { 
+            setStatus('error'); 
+            alert(res.message); 
+        }
+
+    } catch(e) {
+        console.log("Offline Mode: Data disimpan lokal.");
+        setStatus('offline');
+        
+        currentShift = { 
+            id: "OFF-SHIFT-" + new Date().getTime(), 
+            startBal: bal, 
+            startTime: shiftData.startTime 
+        };
+        
+        localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
+        
+        document.getElementById('modal-open-shift').classList.add('hidden');
+        showDashboard();
+        
+        alert("Mode Offline: Operasional Offline dibuka di perangkat ini.");
+    }
 }
 
 async function prepareCloseShift() {
@@ -712,7 +743,7 @@ async function checkout(m) {
             localStorage.setItem('guts_trx_queue', JSON.stringify(queue));
             
             setStatus('offline');
-            alert("OFFLINE MODE: Transaksi disimpan di HP. Data akan terkirim otomatis saat Online.");
+            alert("OFFLINE MODE: Transaksi disimpan di perangkat. Data akan terkirim otomatis saat Online.");
             
             payloadData.header.id = payloadData.header.offlineId;
             finalizeTransaction(payloadData, false);
@@ -779,7 +810,7 @@ async function loadDailyDashboard() {
             itemsRaw: JSON.stringify(q.items),
             method: q.header.method,
             net: q.header.grandTotal,
-            stylistName: "HP (Offline)",
+            stylistName: "(Offline)",
             status: 'PENDING_UPLOAD'
         }));
     }
@@ -1398,9 +1429,9 @@ function takeSnapshot() {
 
     if(!streamKamera) return;
     
-    canvas.width = 640; canvas.height = 480; 
+    canvas.width = 320; canvas.height = 240; 
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    fotoAbsenBase64 = canvas.toDataURL('image/jpeg', 0.5); 
+    fotoAbsenBase64 = canvas.toDataURL('image/jpeg', 0.3); 
     
     img.src = fotoAbsenBase64; 
     img.style.display = 'block'; 
@@ -1629,5 +1660,6 @@ function hardResetApp() {
         window.location.reload(true);
     }
 }
+
 
 
