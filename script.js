@@ -1212,7 +1212,7 @@ async function saveComplexJournal() {
         localStorage.setItem('guts_journal_queue', JSON.stringify(queue));
         
         setStatus('offline'); 
-        alert("OFFLINE: Jurnal disimpan di HP. Akan dikirim saat Online.");
+        alert("OFFLINE: Jurnal disimpan di perangkat. Akan dikirim saat Online.");
         
         journalItems = []; renderJournalRows();
     } 
@@ -1629,9 +1629,13 @@ async function syncOrderCounter() {
     }
 }
 
-let isSyncing = false;
+/* --- FILE: script.js --- */
+
+// Pastikan variabel ini ada di paling atas file
+let isSyncing = false; 
+
 async function processOfflineQueue() {
-    if (typeof isSyncing !== 'undefined' && isSyncing) return;
+    if (isSyncing) return;
 
     const rawAbsen = localStorage.getItem('guts_absen_queue');
     const rawTrx = localStorage.getItem('guts_trx_queue');
@@ -1639,100 +1643,105 @@ async function processOfflineQueue() {
     
     if (!rawAbsen && !rawTrx && !rawJurnal) return;
     
-    if (typeof isSyncing !== 'undefined') isSyncing = true;
+    isSyncing = true;
     setStatus('saving');
 
     let absenQueue = JSON.parse(rawAbsen || "[]");
-    let pendingAbsen = [];
-
     if (absenQueue.length > 0) {
-        console.log(`Syncing ${absenQueue.length} data absen...`);
-        for (let item of absenQueue) {
+
+        const queueToProcess = [...absenQueue]; 
+        
+        for (let item of queueToProcess) {
             try {
-                await fetch(API_URL, {
+                const req = await fetch(API_URL, {
                     method: "POST",
                     body: JSON.stringify({ action: "save_absensi", payload: item })
                 });
+
+                let currentAbsenStore = JSON.parse(localStorage.getItem('guts_absen_queue') || "[]");
+                
+                currentAbsenStore = currentAbsenStore.filter(x => x.tanggal !== item.tanggal || x.nama !== item.nama);
+                
+                if(currentAbsenStore.length > 0) localStorage.setItem('guts_absen_queue', JSON.stringify(currentAbsenStore));
+                else localStorage.removeItem('guts_absen_queue');
+
             } catch (e) {
-                pendingAbsen.push(item);
+                console.log("Gagal kirim absen, data dalam antrian.");
             }
         }
-        if (pendingAbsen.length > 0) localStorage.setItem('guts_absen_queue', JSON.stringify(pendingAbsen));
-        else localStorage.removeItem('guts_absen_queue');
     }
 
     let trxQueue = JSON.parse(rawTrx || "[]");
-    let pendingTrx = [];
-
     if (trxQueue.length > 0) {
-        console.log(`Syncing ${trxQueue.length} transaksi...`);
-        
         const notif = document.createElement('div');
         notif.id = 'sync-notif';
         notif.style.cssText = "position:fixed; bottom:20px; right:20px; background:#e67e22; color:white; padding:10px 20px; border-radius:50px; z-index:9999; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.3); transition:all 0.3s;";
-        notif.innerHTML = `<i class="fas fa-sync fa-spin"></i> Mengirim ${trxQueue.length} Transaksi Offline...`;
+        notif.innerHTML = `<i class="fas fa-sync fa-spin"></i> Mengirim Data Offline...`;
         document.body.appendChild(notif);
 
-        for (let item of trxQueue) {
+        const queueToProcess = [...trxQueue];
+        
+        for (let item of queueToProcess) {
             try {
                 const req = await fetch(API_URL, {
                     method: "POST",
                     body: JSON.stringify({ action: "save_transaksi", payload: item })
                 });
                 const res = await req.json();
-                
-                if (!res.status) console.warn("Transaksi ditolak server:", res.message);
-                
+
+                if(res.status || !res.status) {
+                    
+                    let currentTrxStore = JSON.parse(localStorage.getItem('guts_trx_queue') || "[]");
+                    
+                    const idToDelete = item.header.offlineId;
+                    currentTrxStore = currentTrxStore.filter(t => t.header.offlineId !== idToDelete);
+                    
+                    if(currentTrxStore.length > 0) {
+                        localStorage.setItem('guts_trx_queue', JSON.stringify(currentTrxStore));
+                    } else {
+                        localStorage.removeItem('guts_trx_queue');
+                    }
+                    
+                    if(!res.status) console.warn("Transaksi ditolak server:", res.message);
+                }
+
             } catch (e) {
-                pendingTrx.push(item);
-                console.error("Sync Trx Gagal (Net Error):", e);
-            }
-        }
-
-        if (pendingTrx.length > 0) {
-            localStorage.setItem('guts_trx_queue', JSON.stringify(pendingTrx));
-            
-            notif.style.background = "var(--red)";
-            notif.innerHTML = `<i class="fas fa-wifi"></i> Gagal kirim sebagian. Sisa ${pendingTrx.length} data.`;
-        } else {
-            localStorage.removeItem('guts_trx_queue');
-            
-            notif.style.background = "var(--green)";
-            notif.innerHTML = `<i class="fas fa-check"></i> Semua Transaksi Terkirim!`;
-            
-            loadDailyDashboard();
-        }
-
-        setTimeout(() => { if(notif) notif.remove(); }, 3000);
-    }
-    
-    let jurnalQueue = JSON.parse(rawJurnal || "[]");
-    let pendingJurnal = [];
-
-    if (jurnalQueue.length > 0) {
-        console.log(`Syncing ${jurnalQueue.length} jurnal manual...`);
-        for (let item of jurnalQueue) {
-            try {
-                await fetch(API_URL, {
-                    method: "POST",
-                    body: JSON.stringify({ action: "save_general_journal", payload: item })
-                });
-            } catch (e) {
-                pendingJurnal.push(item);
+                console.error("Tidak ada internet, transaksi dalam antrian:", e);
             }
         }
         
-        if (pendingJurnal.length > 0) {
-            localStorage.setItem('guts_journal_queue', JSON.stringify(pendingJurnal));
+        const sisaQueue = JSON.parse(localStorage.getItem('guts_trx_queue') || "[]");
+        if (sisaQueue.length === 0) {
+            notif.style.background = "var(--green)";
+            notif.innerHTML = `<i class="fas fa-check"></i> Semua Data Terkirim!`;
+            loadDailyDashboard();
         } else {
-            localStorage.removeItem('guts_journal_queue');
-            if(!document.getElementById('view-ops').classList.contains('hidden')) {
-                loadJournalHistory();
-            }
+            notif.style.background = "var(--red)";
+            notif.innerHTML = `<i class="fas fa-wifi"></i> Sisa ${sisaQueue.length} Pending (Coba lagi nanti)`;
+        }
+        setTimeout(() => { if(notif) notif.remove(); }, 3000);
+    }
+
+    let jurnalQueue = JSON.parse(rawJurnal || "[]");
+    if (jurnalQueue.length > 0) {
+        const queueToProcess = [...jurnalQueue];
+        for (let item of queueToProcess) {
+            try {
+                await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "save_general_journal", payload: item }) });
+                
+                let currentJurnalStore = JSON.parse(localStorage.getItem('guts_journal_queue') || "[]");
+                currentJurnalStore = currentJurnalStore.filter(j => JSON.stringify(j) !== JSON.stringify(item));
+                
+                if(currentJurnalStore.length > 0) localStorage.setItem('guts_journal_queue', JSON.stringify(currentJurnalStore));
+                else {
+                    localStorage.removeItem('guts_journal_queue');
+                    if(!document.getElementById('view-ops').classList.contains('hidden')) loadJournalHistory();
+                }
+            } catch (e) {}
         }
     }
 
-    if (typeof isSyncing !== 'undefined') isSyncing = false;
+    isSyncing = false;
     setStatus('saved');
 }
 
@@ -1780,4 +1789,5 @@ setInterval(() => {
         }
     }
 }, 3000);
+
 
