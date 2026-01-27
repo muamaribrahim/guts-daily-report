@@ -1167,11 +1167,55 @@ document.addEventListener('click', function(e) {
 function calcJ() { let d = 0, k = 0; journalItems.forEach(i => {d += i.debit; k += i.kredit}); document.getElementById('total-debit').innerText = fmtRp(d); document.getElementById('total-kredit').innerText = fmtRp(k); document.getElementById('balance-status').innerText = d === k && d >= 0 ? "Balance" : "Tidak Balance"; }
 
 async function saveComplexJournal() {
-    const cat = document.getElementById('journal-category').value, date = document.getElementById('journal-date').value;
-    let items = []; for(let i of journalItems){ const c = i.akun.split(' - ')[0]; const n = masterData.coa.find(x => String(x.Kode_Akun) === c); if(!n) return alert("Akun salah"); items.push({category: cat, debit: i.debit, kredit: i.kredit, akun: c, namaAkun: n.Nama_Akun, ket: i.ket}); }
+    const cat = document.getElementById('journal-category').value;
+    const date = document.getElementById('journal-date').value;
+    
     if(document.getElementById('balance-status').innerText !== "Balance") return alert("Tidak Balance!");
-    setStatus('saving'); document.getElementById('loading-overlay').classList.remove('hidden');
-    try{ await fetch(API_URL, {method: "POST", body: JSON.stringify({action: "save_general_journal", payload: {branch: getSelectedBranch(), date: date, category: cat, items: items}})}); setStatus('saved'); alert("Jurnal berhasil disimpan!"); journalItems = []; renderJournalRows(); loadJournalHistory(); } catch(e){ setStatus('error'); alert(e); } 
+    if(journalItems.length === 0) return alert("Belum ada baris jurnal!");
+
+    let items = []; 
+    for(let i of journalItems){ 
+        const c = i.akun.split(' - ')[0]; 
+        const n = masterData.coa.find(x => String(x.Kode_Akun) === c); 
+        if(!n) return alert("Akun salah: " + c); 
+        items.push({
+            category: cat, debit: i.debit, kredit: i.kredit, 
+            akun: c, namaAkun: n.Nama_Akun, ket: i.ket
+        }); 
+    }
+
+    const payloadData = { branch: getSelectedBranch(), date: date, category: cat, items: items };
+
+    setStatus('saving'); 
+    document.getElementById('loading-overlay').classList.remove('hidden');
+
+    try {
+        const req = await fetch(API_URL, {
+            method: "POST", 
+            body: JSON.stringify({action: "save_general_journal", payload: payloadData})
+        });
+        const res = await req.json();
+        
+        if(res.status) {
+            setStatus('saved'); 
+            alert("Jurnal berhasil disimpan (Online)!"); 
+            journalItems = []; renderJournalRows(); loadJournalHistory();
+        } else {
+            throw new Error(res.message);
+        }
+
+    } catch(e) {
+        console.log("Offline Journal: Simpan ke antrian...");
+        
+        let queue = JSON.parse(localStorage.getItem('guts_journal_queue') || "[]");
+        queue.push(payloadData);
+        localStorage.setItem('guts_journal_queue', JSON.stringify(queue));
+        
+        setStatus('offline'); 
+        alert("OFFLINE: Jurnal disimpan di HP. Akan dikirim saat Online.");
+        
+        journalItems = []; renderJournalRows();
+    } 
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
@@ -1585,12 +1629,17 @@ async function syncOrderCounter() {
     }
 }
 
+let isSyncing = false;
 async function processOfflineQueue() {
+    if (typeof isSyncing !== 'undefined' && isSyncing) return;
+
     const rawAbsen = localStorage.getItem('guts_absen_queue');
     const rawTrx = localStorage.getItem('guts_trx_queue');
+    const rawJurnal = localStorage.getItem('guts_journal_queue');
     
-    if (!rawAbsen && !rawTrx) return;
-
+    if (!rawAbsen && !rawTrx && !rawJurnal) return;
+    
+    if (typeof isSyncing !== 'undefined') isSyncing = true;
     setStatus('saving');
 
     let absenQueue = JSON.parse(rawAbsen || "[]");
@@ -1656,7 +1705,34 @@ async function processOfflineQueue() {
 
         setTimeout(() => { if(notif) notif.remove(); }, 3000);
     }
+    
+    let jurnalQueue = JSON.parse(rawJurnal || "[]");
+    let pendingJurnal = [];
 
+    if (jurnalQueue.length > 0) {
+        console.log(`Syncing ${jurnalQueue.length} jurnal manual...`);
+        for (let item of jurnalQueue) {
+            try {
+                await fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "save_general_journal", payload: item })
+                });
+            } catch (e) {
+                pendingJurnal.push(item);
+            }
+        }
+        
+        if (pendingJurnal.length > 0) {
+            localStorage.setItem('guts_journal_queue', JSON.stringify(pendingJurnal));
+        } else {
+            localStorage.removeItem('guts_journal_queue');
+            if(!document.getElementById('view-ops').classList.contains('hidden')) {
+                loadJournalHistory();
+            }
+        }
+    }
+
+    if (typeof isSyncing !== 'undefined') isSyncing = false;
     setStatus('saved');
 }
 
@@ -1683,4 +1759,25 @@ function toggleCart() {
     cp.classList.toggle('active');
 }
 
+setInterval(() => {
+    const isOnline = navigator.onLine;
+    
+    const rawTrx = localStorage.getItem('guts_trx_queue');
+    const rawAbsen = localStorage.getItem('guts_absen_queue');
+    const hasQueue = (rawTrx || rawAbsen);
+
+    if (isOnline && hasQueue) {
+        console.log("Auto-Sync: Mendeteksi koneksi & antrian. Mencoba kirim data...");
+        processOfflineQueue();
+    }
+    
+    const statusEl = document.getElementById('sync-status');
+    if(statusEl) {
+        if (!isOnline) {
+            setStatus('offline');
+        } else if (isOnline && !hasQueue) {
+            if(statusEl.innerText.includes('OFFLINE')) setStatus('saved');
+        }
+    }
+}, 3000);
 
