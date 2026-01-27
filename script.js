@@ -169,7 +169,7 @@ async function performLogin() {
 async function performLoginCheck() {
     const savedShift = localStorage.getItem('guts_shift_' + currentUser.Username);
     if(savedShift) {
-        console.log("Offline Login: Menggunakan sesi lokal.");
+        console.log("Offline Login.");
         currentShift = JSON.parse(savedShift);
         showDashboard();
         return;
@@ -202,11 +202,11 @@ async function performLoginCheck() {
             document.getElementById('modal-open-shift').classList.remove('hidden');
         }
     } catch(e) {
-        console.log("Gagal konek server (Offline). Cek data lokal...");
+        console.log("Gagal tersambung ke server (Offline). Cek local storage...");
         const hasMasterData = localStorage.getItem('guts_master_cache');
         
         if (hasMasterData) {
-            alert("Mode Offline Aktif. Data akan disinkronkan nanti.");
+            alert("Mode Offline Aktif. Data akan sinkron ke server saat online.");
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('modal-open-shift').classList.remove('hidden');
         } else {
@@ -250,7 +250,7 @@ async function processOpenShift() {
         }
 
     } catch(e) {
-        console.log("Offline Mode: Data disimpan lokal.");
+        console.log("Offline Mode: Data disimpan di local storage.");
         setStatus('offline');
         
         currentShift = { 
@@ -264,7 +264,7 @@ async function processOpenShift() {
         document.getElementById('modal-open-shift').classList.add('hidden');
         showDashboard();
         
-        alert("Mode Offline: Operasional Offline dibuka di perangkat ini.");
+        alert("Mode Offline: data disimpan di local storage hingga koneksi internet dihubungkan.");
     }
 }
 
@@ -284,7 +284,7 @@ async function prepareCloseShift() {
         document.getElementById('disp-sys-calc').innerText = fmtRp(sysCalc);
         document.getElementById('modal-close-shift').dataset.sys = sysCalc;
         document.getElementById('modal-close-shift').classList.remove('hidden');
-    } catch(e) { alert("Gagal hitung shift: " + e); }
+    } catch(e) { alert("Gagal hitung saldo: " + e); }
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
@@ -300,7 +300,6 @@ async function processCloseShift() {
     }
 }
 
-/* --- REVISI: LOGOUT AMAN (OFFLINE FRIENDLY) --- */
 function logout() { 
     if(currentUser && currentUser.Username) {
         localStorage.removeItem('guts_shift_' + currentUser.Username);
@@ -337,7 +336,7 @@ function updateSidebarAddress() {
         addr = "Jl. Kerkof No.23, Leuwigajah<br>Kec. Cimahi Selatan, Kota Cimahi";
     }
 
-    el.innerHTML = addr; // Gunakan innerHTML agar <br> terbaca sebagai enter
+    el.innerHTML = addr;
 }
 
 async function loadMaster() {
@@ -351,13 +350,13 @@ async function loadMaster() {
             initDropdowns(); 
         } 
     } catch(e){ 
-        console.log("Offline Mode: Mengambil Data lokal...");
+        console.log("Offline Mode: Mengambil Data local storage...");
         const cached = localStorage.getItem(CACHE_KEY);
         if(cached) {
             masterData = JSON.parse(cached);
             initDropdowns();
             const sel = document.getElementById('sync-status');
-            if(sel) { sel.style.color = 'orange'; sel.innerText = 'Offline Mode (Data lokal)'; }
+            if(sel) { sel.style.color = 'orange'; sel.innerText = 'Offline Mode (local storage)'; }
         } else {
             alert("Gagal memuat database & tidak ada data lokal (offline).");
         }
@@ -497,7 +496,7 @@ function loadActiveOrder() {
 
 function closeOrderTab(id, e) { 
     e.stopPropagation(); 
-    if(confirm("Tutup Tab ini? Data hilang.")) { 
+    if(confirm("Tutup Tab ini? Nomor order akan dihapus.")) { 
         orders = orders.filter(x => x.id !== id); 
         activeOrderId = orders.length ? orders[0].id : null; 
         saveOrdersToLocal(); renderOrderTabs(); 
@@ -679,7 +678,7 @@ async function checkout(m) {
         if(cIn < t) return alert(`Kurang: ${fmtRp(t - cIn)}`); 
         
         let rawChange = cIn - t; 
-        const ti = prompt(`Kembalian: ${fmtRp(rawChange)}\n\nMasukkan TIPS (0 jika tidak ada):`, "0"); 
+        const ti = prompt(`Kembalian: ${fmtRp(rawChange)}\n\nMasukkan Tips:`, "0"); 
         if(ti === null) return; 
         tips = cleanNum(ti); 
         change = rawChange - tips; 
@@ -693,7 +692,7 @@ async function checkout(m) {
         tips = cIn - t; 
         change = 0; 
         if(tips > 0){ 
-            if(!confirm(`Kelebihan ${fmtRp(tips)} dianggap TIPS?`)) return; 
+            if(!confirm(`Kelebihan ${fmtRp(tips)} dianggap Tips?`)) return; 
         }
     }
     
@@ -759,7 +758,7 @@ async function checkout(m) {
             finalizeTransaction(payloadData, false);
 
         } catch (errStorage) {
-            alert("GAGAL SIMPAN OFFLINE: Memori Browser Penuh! Hapus history atau segera online.");
+            alert("GAGAL SIMPAN OFFLINE: Memori Browser Penuh! hubungkan internet.");
         }
     } 
     document.getElementById('loading-overlay').classList.add('hidden');
@@ -1629,9 +1628,6 @@ async function syncOrderCounter() {
     }
 }
 
-/* --- FILE: script.js --- */
-
-// Pastikan variabel ini ada di paling atas file
 let isSyncing = false; 
 
 async function processOfflineQueue() {
@@ -1717,7 +1713,7 @@ async function processOfflineQueue() {
             loadDailyDashboard();
         } else {
             notif.style.background = "var(--red)";
-            notif.innerHTML = `<i class="fas fa-wifi"></i> Sisa ${sisaQueue.length} Pending (Coba lagi nanti)`;
+            notif.innerHTML = `<i class="fas fa-wifi"></i> Sisa ${sisaQueue.length} Pending (terkirim saat online)`;
         }
         setTimeout(() => { if(notif) notif.remove(); }, 3000);
     }
@@ -1789,5 +1785,6 @@ setInterval(() => {
         }
     }
 }, 3000);
+
 
 
