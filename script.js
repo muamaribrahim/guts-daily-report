@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyptXmbl9becf5Yg6BZfdd1rhYIzy1MoTXDhrnOVyY2NtnQgwNpFs9GQNZQ1WzmECMA9w/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzq03jg3KbzYXDUUk1LFsaZeKOFdXmAW_00u56Bzro77FAkZcFwPdvQtoIsf3h8Kb8MXw/exec"; 
 
 let currentUser = null;
 let currentShift = null; 
@@ -1197,7 +1197,7 @@ async function saveComplexJournal() {
         
         if(res.status) {
             setStatus('saved'); 
-            alert("Jurnal berhasil disimpan (Online)!"); 
+            alert("Jurnal berhasil disimpan!"); 
             journalItems = []; renderJournalRows(); loadJournalHistory();
         } else {
             throw new Error(res.message);
@@ -1785,6 +1785,7 @@ setInterval(() => {
         }
     }
 }, 3000);
+
 
 
 
