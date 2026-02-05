@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzq03jg3KbzYXDUUk1LFsaZeKOFdXmAW_00u56Bzro77FAkZcFwPdvQtoIsf3h8Kb8MXw/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbyL_79l4WaHrh7k9EMjhzNWofFexD8omtP2Ifon0L-RyCioqmt3INlJT24SEpJDd32Y8w/exec"; 
 
 let currentUser = null;
 let currentShift = null; 
@@ -1224,6 +1224,7 @@ async function loadJournalHistory() {
     
     const startDate = document.getElementById('history-start-date').value;
     const endDate = document.getElementById('history-end-date').value;
+    const accFilter = document.getElementById('history-account-filter').value; 
 
     try { 
         const req = await fetch(API_URL, {
@@ -1234,7 +1235,8 @@ async function loadJournalHistory() {
                     branch: getSelectedBranch(), 
                     category: document.getElementById('journal-category').value,
                     startDate: startDate,
-                    endDate: endDate
+                    endDate: endDate,
+                    accountFilter: accFilter
                 }
             })
         }); 
@@ -1268,7 +1270,7 @@ async function loadJournalHistory() {
             }); 
             tb.innerHTML = html; 
         } else { 
-            tb.innerHTML = '<tr><td colspan="6" align="center" style="padding:20px;">Tidak ada data pada periode ini.</td></tr>'; 
+            tb.innerHTML = '<tr><td colspan="6" align="center" style="padding:20px;">Data tidak ditemukan.</td></tr>'; 
         } 
     } catch (e) { 
         tb.innerHTML = `<tr><td colspan="6">Error: ${e}</td></tr>`; 
@@ -1785,6 +1787,7 @@ setInterval(() => {
         }
     }
 }, 3000);
+
 
 
 
