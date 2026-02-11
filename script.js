@@ -374,12 +374,12 @@ async function processCloseShift() {
     }
 
     const selisih = endBal - sysCalc;
-    let msg = `Saldo Cash: ${fmtRp(endBal)}\nSistem: ${fmtRp(sysCalc)}\n\n`;
+    let msg = `Saldo Cash: ${fmtRp(endBal)}\nHitungan sistem: ${fmtRp(sysCalc)}\n\n`;
     
     if (selisih !== 0) {
         msg += `⚠️ Selisih: ${fmtRp(selisih)}\nApakah saldo cash yang ada sudah sesuai?`;
     } else {
-        msg += `✅ Balance (Sesuai).\nLanjutkan Closing & Logout?`;
+        msg += `✅ Sesuai.\nLanjutkan Closing & Logout?`;
     }
 
     if (!confirm(msg)) return;
@@ -543,22 +543,40 @@ function initDropdowns() {
 function switchMenu(menuId) {
     document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active')); 
     const menus = document.querySelectorAll('.menu-item');
-    menus.forEach(m => { if(m.getAttribute('onclick').includes(menuId)) m.classList.add('active'); });
+    menus.forEach(m => { 
+        if(m.getAttribute('onclick') && m.getAttribute('onclick').includes(menuId)) {
+            m.classList.add('active'); 
+        }
+    });
 
     document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden')); 
-    document.getElementById('view-' + menuId).classList.remove('hidden');
+    const targetView = document.getElementById('view-' + menuId);
+    if(targetView) targetView.classList.remove('hidden');
     
-    if(menuId !== 'absen') stopCamera();
+    if(menuId !== 'absen' && typeof stopCamera === 'function') stopCamera();
     
-    if(menuId !== 'ops') document.getElementById('journal-history-tbody').innerHTML = '';
+    if(menuId !== 'ops') {
+        const jBody = document.getElementById('journal-history-tbody');
+        if(jBody) jBody.innerHTML = '';
+    }
+
     if(menuId === 'stock') renderStockView(); 
     if(menuId === 'rekap') loadMonthlyRecap(); 
     if(menuId === 'ops') initJournalView(); 
     if(menuId === 'pos') { renderOrderTabs(); checkBlankState(); }
+    
     if(menuId === 'kapster') {
-        const now = new Date(); 
-        if(!document.getElementById('kapster-start-date').value) document.getElementById('kapster-start-date').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-        if(!document.getElementById('kapster-end-date').value) document.getElementById('kapster-end-date').value = getLocalDate();
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        
+        const startEl = document.getElementById('kapster-start-date');
+        if(startEl) startEl.value = `${y}-${m}-01`;
+        
+        const endEl = document.getElementById('kapster-end-date');
+        if(endEl) endEl.value = `${y}-${m}-${d}`;
+        
         loadKapsterReport();
     }
 }
@@ -1922,6 +1940,7 @@ setInterval(() => {
         }
     }
 }, 3000);
+
 
 
 
