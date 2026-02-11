@@ -127,63 +127,83 @@ async function performLogin() {
     
     if(!u || !p) return alert("Isi Username & Password!");
 
-    btn.innerText = "Verifying..."; btn.disabled = true;
+    const originalText = btn.innerHTML; 
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verifying...'; 
+    btn.disabled = true;
 
     try {
         const req = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({ action: "login", payload: { username: u, password: p } })
         });
+        
+        if (!req.ok) throw new Error("Gagal koneksi ke server");
+
         const res = await req.json();
 
         if (res.status) { 
             currentUser = res.data; 
             localStorage.setItem('guts_user', JSON.stringify(currentUser)); 
             
-            performLoginCheck();
+            performLoginCheck(); 
+            
         } else {
             alert(res.message);
+            btn.innerHTML = "LOGIN"; 
+            btn.disabled = false;
         }
-    } catch(e){ 
-        console.log("Login Online Gagal. Mencoba Login Offline...");
+
+    } catch(e) { 
+        console.warn("Login Online Gagal. Mencoba Login Offline...", e);
         
         const cachedUserStr = localStorage.getItem('guts_user');
         
         if (cachedUserStr) {
             const cachedUser = JSON.parse(cachedUserStr);
             
-            if (u === cachedUser.Username) {
+            if (u === cachedUser.Username || u === cachedUser.username) {
                 currentUser = cachedUser;
-                alert("Login Mode Offline Berhasil.");
+                alert("⚠️ MODE OFFLINE\nLogin menggunakan data tersimpan.");
+                
                 performLoginCheck();
             } else {
                 alert("Offline: Username tidak cocok dengan data terakhir di perangkat ini.");
+                btn.innerHTML = "LOGIN"; 
+                btn.disabled = false;
             }
         } else {
             alert("Gagal Login (Offline). Anda harus Online untuk login pertama kali.");
+            btn.innerHTML = "LOGIN"; 
+            btn.disabled = false;
         }
     } 
-    btn.innerText = "LOGIN"; btn.disabled = false;
 }
 
 async function performLoginCheck() {
-    const savedShift = localStorage.getItem('guts_shift_' + currentUser.Username);
+    const btn = document.getElementById('btn-login');
+
+    const savedShift = localStorage.getItem('guts_shift_' + (currentUser.Username || currentUser.username));
     if(savedShift) {
-        console.log("Offline Login.");
+        console.log("Melanjutkan sesi dari Local Storage.");
         currentShift = JSON.parse(savedShift);
+        
+        if(btn) btn.innerHTML = '<i class="fas fa-check"></i> Success';
+        
         showDashboard();
         return;
     }
 
-    const btn = document.getElementById('btn-login');
-    if(btn) btn.innerText = "Checking Session...";
+    if(btn) {
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Checking Session...';
+        btn.disabled = true;
+    }
 
     try {
         const req = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({ 
                 action: "check_open_shift", 
-                payload: { user: currentUser.Username } 
+                payload: { user: currentUser.Username || currentUser.username } 
             })
         });
         const res = await req.json();
@@ -194,38 +214,63 @@ async function performLoginCheck() {
                 startBal: res.data.startBal, 
                 startTime: res.data.startTime 
             };
-            localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
-            alert("Sesi dipulihkan dari server.");
+            localStorage.setItem('guts_shift_' + (currentUser.Username || currentUser.username), JSON.stringify(currentShift));
+            
+            alert("✅ Sesi dipulihkan dari server.");
             showDashboard();
         } else {
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('modal-open-shift').classList.remove('hidden');
+            
+            if(typeof setupDashboardInfo === 'function') setupDashboardInfo();
+            else {
+                 const uDisp = document.getElementById('user-display');
+                 if(uDisp) uDisp.innerText = currentUser.Username || currentUser.username;
+            }
         }
+
     } catch(e) {
-        console.log("Gagal tersambung ke server (Offline). Cek local storage...");
+        console.warn("Gagal cek shift ke server (Offline).", e);
+        
         const hasMasterData = localStorage.getItem('guts_master_cache');
         
         if (hasMasterData) {
-            alert("Mode Offline Aktif. Data akan sinkron ke server saat online.");
+            alert("Mode Offline Aktif. Silakan Buka Toko secara Offline.");
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('modal-open-shift').classList.remove('hidden');
+             
+             const uDisp = document.getElementById('user-display');
+             if(uDisp) uDisp.innerText = currentUser.Username || currentUser.username;
+
         } else {
-            alert("Anda sedang Offline & belum ada data tersimpan. Harap online untuk login pertama kali.");
+            alert("DATA KOSONG (OFFLINE).\nHarap online untuk sinkronisasi awal.");
+            if(btn) {
+                btn.innerHTML = "LOGIN";
+                btn.disabled = false;
+            }
         }
     }
-    
-    if(btn) btn.innerText = "LOGIN";
 }
 
 async function processOpenShift() {
-    const bal = cleanNum(document.getElementById('shift-start-bal').value);
-    if (isNaN(bal) || document.getElementById('shift-start-bal').value === '') return alert("Isi saldo awal!");
+    const balInput = document.getElementById('shift-start-bal');
+    const bal = cleanNum(balInput.value);
+    const btn = document.querySelector('#modal-open-shift .btn-pay');
 
+    if (isNaN(bal) || balInput.value.trim() === '') {
+        alert("Isi saldo awal petty cash (isi 0 jika kosong)!");
+        balInput.focus();
+        return;
+    }
+
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing...';
+    btn.disabled = true;
     setStatus('saving');
     
     const shiftData = {
         branch: getSelectedBranch(),
-        user: currentUser.Username,
+        user: currentUser.Username || currentUser.username,
         startBal: bal,
         startTime: new Date().getTime()
     };
@@ -235,36 +280,63 @@ async function processOpenShift() {
             method: "POST",
             body: JSON.stringify({ action: "open_shift", payload: shiftData })
         });
+        
+        if (!req.ok) throw new Error("Gagal menyambungkan ke server");
+        
         const res = await req.json();
         
         if(res.status) {
             setStatus('saved');
-            currentShift = { id: res.data.shiftId, startBal: bal, startTime: shiftData.startTime };
-            localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
+            
+            currentShift = { 
+                id: res.data.shiftId, 
+                startBal: bal, 
+                startTime: shiftData.startTime 
+            };
+            localStorage.setItem('guts_shift_' + shiftData.user, JSON.stringify(currentShift));
             
             document.getElementById('modal-open-shift').classList.add('hidden');
-            showDashboard();
+            
+            if(typeof showDashboard === 'function') showDashboard(); 
+            else if(typeof loadDailyDashboard === 'function') loadDailyDashboard();
         } else { 
-            setStatus('error'); 
-            alert(res.message); 
+            throw new Error(res.message || "Gagal membuka shift di server."); 
         }
 
     } catch(e) {
-        console.log("Offline Mode: Data disimpan di local storage.");
-        setStatus('offline');
-        
-        currentShift = { 
-            id: "OFF-SHIFT-" + new Date().getTime(), 
-            startBal: bal, 
-            startTime: shiftData.startTime 
-        };
-        
-        localStorage.setItem('guts_shift_' + currentUser.Username, JSON.stringify(currentShift));
-        
-        document.getElementById('modal-open-shift').classList.add('hidden');
-        showDashboard();
-        
-        alert("Mode Offline: data disimpan di local storage hingga koneksi internet dihubungkan.");
+        console.warn("Open Shift Error:", e);
+
+        if (e.message.includes("Failed to fetch") || e.message.includes("NetworkError") || e.message.includes("Gagal menyambungkan")) {
+            
+            setStatus('offline');
+            console.log("Offline Mode: Membuat sesi offline.");
+            
+            currentShift = { 
+                id: "OFF-SHIFT-" + new Date().getTime(), 
+                startBal: bal, 
+                startTime: shiftData.startTime,
+                isOffline: true 
+            };
+            
+            localStorage.setItem('guts_shift_' + shiftData.user, JSON.stringify(currentShift));
+            
+            document.getElementById('modal-open-shift').classList.add('hidden');
+            
+            if(typeof showDashboard === 'function') showDashboard();
+            else if(typeof loadDailyDashboard === 'function') loadDailyDashboard();
+            
+            alert("⚠️ MODE OFFLINE AKTIF\n\nData Shift disimpan di perangkat karena internet terputus.\nTransaksi dapat berjalan normal.");
+
+        } else {
+            setStatus('error');
+            alert("Gagal: " + e.message);
+        }
+
+    } finally {
+        if(btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 }
 
@@ -289,14 +361,77 @@ async function prepareCloseShift() {
 }
 
 async function processCloseShift() {
-    const endBal = cleanNum(document.getElementById('shift-end-bal').value);
-    const sysCalc = parseFloat(document.getElementById('modal-close-shift').dataset.sys);
-    if(confirm(`Saldo Cash hari ini: ${fmtRp(endBal)}\nSelisih: ${fmtRp(endBal - sysCalc)}\n\nReport hari ini sudah sesuai?`)) {
-         setStatus('saving');
-         try {
-            await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "close_shift", payload: { shiftId: currentShift.id, endBal: endBal, systemCalc: sysCalc }}) });
-            setStatus('saved'); logout();
-        } catch(e) { setStatus('error'); alert(e); }
+    const endBalInput = document.getElementById('shift-end-bal');
+    const modalEl = document.getElementById('modal-close-shift');
+    const btn = modalEl.querySelector('.btn-pay.red');
+    const endBal = cleanNum(endBalInput.value);
+    const sysCalc = parseFloat(modalEl.dataset.sys) || 0;
+
+    if (endBalInput.value.trim() === "") {
+        alert("Isi nominal Saldo Cash sesuai yang ada di laci.");
+        endBalInput.focus();
+        return;
+    }
+
+    const selisih = endBal - sysCalc;
+    let msg = `Saldo Cash: ${fmtRp(endBal)}\nSistem: ${fmtRp(sysCalc)}\n\n`;
+    
+    if (selisih !== 0) {
+        msg += `⚠️ Selisih: ${fmtRp(selisih)}\nApakah saldo cash yang ada sudah sesuai?`;
+    } else {
+        msg += `✅ Balance (Sesuai).\nLanjutkan Closing & Logout?`;
+    }
+
+    if (!confirm(msg)) return;
+
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing...';
+    btn.disabled = true;
+    setStatus('saving');
+
+    try {
+        const req = await fetch(API_URL, { 
+            method: "POST", 
+            body: JSON.stringify({ 
+                action: "close_shift", 
+                payload: { 
+                    shiftId: currentShift ? currentShift.id : null,
+                    endBal: endBal, 
+                    systemCalc: sysCalc,
+                    diff: selisih
+                }
+            }) 
+        });
+
+        if (!req.ok) throw new Error("Server tidak merespon");
+
+        const res = await req.json();
+
+        if (res.status) {
+            setStatus('saved');
+            alert("✅ Closing Berhasil! Sampai jumpa besok.");
+            
+            localStorage.removeItem('guts_shift_data');
+            
+            logout();
+        } else {
+            throw new Error(res.message || "Gagal memproses closing di server.");
+        }
+
+    } catch (e) {
+        setStatus('error');
+        console.error(e);
+
+        if (e.message.includes("Failed to fetch") || e.message.includes("NetworkError")) {
+            alert("⚠️ KONEKSI GAGAL\n\nInternet terputus saat mencoba closing.\nCek koneksi internet dan klik logout lagi.");
+        } else {
+            alert("Terjadi Error: " + e.message);
+        }
+    } finally {
+        if(btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 }
 
@@ -1787,6 +1922,7 @@ setInterval(() => {
         }
     }
 }, 3000);
+
 
 
 
