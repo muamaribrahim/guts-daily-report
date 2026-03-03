@@ -347,17 +347,23 @@
             </header>
 
             <section id="view-dashboard" class="view-section hidden">
-                <header class="content-header">
-                    <h3><i class="fas fa-chart-pie"></i> Performa Operasional</h3>
-                    <button class="btn-xs" style="width:auto; padding:4px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px;" onclick="loadPerformanceDashboard()">
-                        <i class="fas fa-sync"></i> Refresh
-                    </button>
+                <header class="content-header" style="flex-wrap: wrap; gap:10px; height:auto; padding: 10px 20px;">
+                    <h3 style="margin-right:auto;"><i class="fas fa-chart-line"></i> Analisis Performa</h3>
+                    
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <input type="date" id="dash-start" style="width:130px; background:#222; border:1px solid #444; color:white;">
+                        <span style="color:#aaa;">s/d</span>
+                        <input type="date" id="dash-end" style="width:130px; background:#222; border:1px solid #444; color:white;">
+                        <button class="btn-xs" style="width:auto; padding:8px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px; height:38px;" onclick="loadPerformanceDashboard()">
+                            <i class="fas fa-filter"></i> Filter
+                        </button>
+                    </div>
                 </header>
 
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:20px;">
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:20px; padding:0 20px;">
                     <div class="stat-block stat-blue" style="color:white;">
                         <div class="sb-val" id="d-total-visit">0</div>
-                        <div class="sb-label">Total Kunjungan (Bulan Ini)</div>
+                        <div class="sb-label">Total Kunjungan</div>
                         <i class="fas fa-walking sb-icon"></i>
                     </div>
                     <div class="stat-block stat-yellow" style="color:black;">
@@ -372,40 +378,40 @@
                     </div>
                 </div>
 
-                <div class="dashboard-grid">
+                <div class="dashboard-grid" style="padding: 0 20px 50px 20px;">
                     
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tren Kunjungan (7 Hari)</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tren Kunjungan (Periode Terpilih)</h4>
                         <div class="chart-container">
                             <canvas id="chart-traffic"></canvas>
                         </div>
                     </div>
 
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Produktivitas Kapster</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Produktivitas Kapster (Qty)</h4>
                         <div class="chart-container">
                             <canvas id="chart-employee"></canvas>
                         </div>
                     </div>
 
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tipe Kunjungan</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Komposisi Tipe Kunjungan</h4>
                         <div class="chart-container">
                             <canvas id="chart-types"></canvas>
                         </div>
                     </div>
 
-                    <div class="chart-card" style="justify-content:center; align-items:center; text-align:center;">
-                        <i class="fas fa-smile-wink fa-3x" style="color:#333; margin-bottom:10px;"></i>
-                        <div style="color:#666;">Data Analisis Lainnya</div>
+                    <div class="chart-card">
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Penjualan: Jasa vs Produk (Qty)</h4>
+                        <div class="chart-container">
+                            <canvas id="chart-composition"></canvas>
+                        </div>
                     </div>
 
                     <div class="heatmap-card">
-                        <h4 style="color:var(--accent); margin-bottom:5px;"><i class="fas fa-fire"></i> Analisa Jam Sibuk (09:00 - 21:00)</h4>
-                        <div style="font-size:0.8em; color:#888;">Semakin terang warnanya, semakin ramai pengunjung pada jam tersebut.</div>
-                        
-                        <div id="heatmap-container" class="heatmap-grid">
-                            </div>
+                        <h4 style="color:var(--accent); margin-bottom:5px;"><i class="fas fa-fire"></i> Intensitas Jam Sibuk (Rata-rata)</h4>
+                        <div style="font-size:0.8em; color:#888;">Akumulasi keramaian dari jam 09:00 s.d 21:00 pada periode yang dipilih.</div>
+                        <div id="heatmap-container" class="heatmap-grid"></div>
                     </div>
 
                 </div>
