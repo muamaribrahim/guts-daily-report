@@ -363,54 +363,68 @@
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:20px; padding:0 20px;">
                     <div class="stat-block stat-blue" style="color:white;">
                         <div class="sb-val" id="d-total-visit">0</div>
-                        <div class="sb-label">Total Kunjungan</div>
+                        <div class="sb-label">Total Customer</div>
                         <i class="fas fa-walking sb-icon"></i>
                     </div>
                     <div class="stat-block stat-yellow" style="color:black;">
                         <div class="sb-val" id="d-avg-day">0</div>
-                        <div class="sb-label">Rata-rata Tamu / Hari</div>
+                        <div class="sb-label">Rata-rata Customer / Hari</div>
                         <i class="fas fa-calendar-day sb-icon"></i>
                     </div>
                     <div class="stat-block stat-purple" style="color:white;">
                         <div class="sb-val" id="d-top-service">-</div>
-                        <div class="sb-label">Layanan Terlaris</div>
+                        <div class="sb-label">Top Service</div>
                         <i class="fas fa-cut sb-icon"></i>
                     </div>
                 </div>
 
                 <div class="dashboard-grid" style="padding: 0 20px 50px 20px;">
-                    
+        
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tren Kunjungan (Periode Terpilih)</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tren Harian</h4>
                         <div class="chart-container">
                             <canvas id="chart-traffic"></canvas>
                         </div>
                     </div>
 
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Produktivitas Kapster (Qty)</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Produktivitas Kapster (Services)</h4>
                         <div class="chart-container">
                             <canvas id="chart-employee"></canvas>
                         </div>
                     </div>
 
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Komposisi Tipe Kunjungan</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tipe Customer</h4>
                         <div class="chart-container">
                             <canvas id="chart-types"></canvas>
                         </div>
                     </div>
 
                     <div class="chart-card">
-                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Rincian Terjual (Jasa & Produk)</h4>
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Metode Pembayaran (Cash vs QRIS)</h4>
                         <div class="chart-container">
-                            <canvas id="chart-composition"></canvas>
+                            <canvas id="chart-payment"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Detail Penjualan Jasa</h4>
+                        <div class="chart-container">
+                            <canvas id="chart-services"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Detail Penjualan Produk</h4>
+                        <div class="chart-container">
+                            <canvas id="chart-products"></canvas>
                         </div>
                     </div>
 
                     <div class="heatmap-card">
-                        <h4 style="color:var(--accent); margin-bottom:5px;"><i class="fas fa-fire"></i> Intensitas Jam Sibuk (Rata-rata)</h4>
-                        <div style="font-size:0.8em; color:#888;">Akumulasi keramaian dari jam 09:00 s.d 21:00 pada periode yang dipilih.</div>
+                        <h4 style="color:var(--accent); margin-bottom:5px;"><i class="fas fa-fire"></i> Intensitas Jam Sibuk</h4>
+                        <div style="font-size:0.8em; color:#888;">Traffic per jam:</div>
                         <div id="heatmap-container" class="heatmap-grid"></div>
                     </div>
 
