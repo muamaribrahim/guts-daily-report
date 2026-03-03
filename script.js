@@ -512,6 +512,8 @@ function initDropdowns() {
     let hSty = '<option value="">-- Pilih Kapster --</option>';
     let hAbs = '<option value="">-- Pilih Nama --</option>';
 
+    const currentBranch = getSelectedBranch(); 
+
     if(masterData.produk) {
         masterData.produk.forEach(p => {
             const pr = parseInt(String(p.Harga_Jual).replace(/[^0-9]/g, '')) || 0;
@@ -527,8 +529,21 @@ function initDropdowns() {
     if(masterData.karyawan) {
         masterData.karyawan.filter(k => k.Status === 'ACTIVE').forEach(k => { 
             hSty += `<option value="${k.ID}">${k.Nama}</option>`; 
-            const s = k.Shift || 'PAGI';
-            hAbs += `<option value="${k.Nama}" data-shift="${s}">${k.Nama}</option>`;
+            
+            const empBranch = k.Shift; 
+          
+            let showEmployee = false;
+
+            if (currentBranch === 'HO') {
+                showEmployee = true;
+            } else if (empBranch === currentBranch) {
+                showEmployee = true;
+            }
+
+            if (showEmployee) {
+
+                hAbs += `<option value="${k.Nama}" data-shift="PAGI">${k.Nama}</option>`;
+            }
         });
     }
     
@@ -1940,11 +1955,3 @@ setInterval(() => {
         }
     }
 }, 3000);
-
-
-
-
-
-
-
-
