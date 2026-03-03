@@ -1989,25 +1989,42 @@ async function loadPerformanceDashboard() {
             document.getElementById('d-avg-day').innerText = d.avgVisit;
             document.getElementById('d-top-service').innerText = d.topService;
             
-            renderChart('chart-traffic', 'line', d.trendLabels, d.trendValues, 'Tren Kunjungan', '#f1c40f');
-            
-            const kapsterNames = Object.keys(d.productivity);
-            const kapsterVals = Object.values(d.productivity);
-            renderChart('chart-employee', 'bar', kapsterNames, kapsterVals, 'Jumlah Kepala (Cuts)', '#3498db');
-            
-            const hoursLabel = [];
-            const hoursData = [];
-            for(let i=8; i<=21; i++) {
-                hoursLabel.push(i + ":00");
-                hoursData.push(d.peakHours[i]);
-            }
-            renderChart('chart-hours', 'bar', hoursLabel, hoursData, 'Kepadatan', '#e74c3c');
-            
+            renderChart('chart-traffic', 'line', d.trendLabels, d.trendValues, 'Tren', '#f1c40f');
+            renderChart('chart-employee', 'bar', Object.keys(d.productivity), Object.values(d.productivity), 'Cuts', '#3498db');
             renderChart('chart-types', 'doughnut', Object.keys(d.visitTypes), Object.values(d.visitTypes), 'Tipe', ['#f1c40f', '#3498db', '#2ecc71']);
+
+            renderHeatmap(d.peakHours);
         }
     } catch (e) {
         console.error(e);
-        alert("Gagal memuat dashboard: " + e);
+        // alert("Gagal memuat dashboard: " + e); // Optional
+    }
+}
+
+function renderHeatmap(hourlyData) {
+    const container = document.getElementById('heatmap-container');
+    container.innerHTML = '';
+
+    let maxVal = 0;
+    for(let i=9; i<=21; i++) {
+        if(hourlyData[i] > maxVal) maxVal = hourlyData[i];
+    }
+    
+    for(let i=9; i<=21; i++) {
+        const val = hourlyData[i] || 0;
+        
+        let opacity = 0.2; 
+        if(maxVal > 0) opacity = 0.2 + ((val / maxVal) * 0.8);
+        
+        const colorStyle = `background: rgba(241, 196, 15, ${opacity}); color: ${opacity > 0.6 ? '#000' : '#fff'};`;
+        
+        const html = `
+            <div class="heatmap-box" style="${colorStyle}">
+                <div class="hm-hour">${String(i).padStart(2,'0')}:00</div>
+                <div class="hm-val">${val}</div>
+            </div>
+        `;
+        container.innerHTML += html;
     }
 }
 
