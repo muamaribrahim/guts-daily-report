@@ -607,6 +607,16 @@ function switchMenu(menuId) {
     }
 
     if(menuId === 'dashboard') {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+
+        if(!document.getElementById('dash-start').value) {
+            document.getElementById('dash-start').value = `${y}-${m}-01`;
+            document.getElementById('dash-end').value = `${y}-${m}-${d}`;
+        }
+
         loadPerformanceDashboard();
     }
 }
@@ -1972,12 +1982,21 @@ setInterval(() => {
 }, 3000);
 
 async function loadPerformanceDashboard() {
+    const btn = document.querySelector('#view-dashboard button'); // Tombol Filter
+    const oriHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
     try {
         const req = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
                 action: "get_general_dashboard",
-                payload: { branch: getSelectedBranch() }
+                payload: { 
+                    branch: getSelectedBranch(),
+                    startDate: document.getElementById('dash-start').value,
+                    endDate: document.getElementById('dash-end').value
+                }
             })
         });
         const res = await req.json();
@@ -1989,15 +2008,22 @@ async function loadPerformanceDashboard() {
             document.getElementById('d-avg-day').innerText = d.avgVisit;
             document.getElementById('d-top-service').innerText = d.topService;
             
-            renderChart('chart-traffic', 'line', d.trendLabels, d.trendValues, 'Tren', '#f1c40f');
+            renderChart('chart-traffic', 'line', d.trendLabels, d.trendValues, 'Kunjungan', '#f1c40f');
+            
             renderChart('chart-employee', 'bar', Object.keys(d.productivity), Object.values(d.productivity), 'Cuts', '#3498db');
+            
             renderChart('chart-types', 'doughnut', Object.keys(d.visitTypes), Object.values(d.visitTypes), 'Tipe', ['#f1c40f', '#3498db', '#2ecc71']);
+
+            const compData = d.itemComposition; 
+            renderChart('chart-composition', 'pie', ['Jasa (Service)', 'Produk (Goods)'], [compData.SERVICE, compData.PRODUCT], 'Qty', ['#9b59b6', '#e67e22']);
 
             renderHeatmap(d.peakHours);
         }
     } catch (e) {
         console.error(e);
-        // alert("Gagal memuat dashboard: " + e); // Optional
+    } finally {
+        btn.innerHTML = oriHtml;
+        btn.disabled = false;
     }
 }
 
