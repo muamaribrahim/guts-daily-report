@@ -8,6 +8,7 @@ let activeOrderId = null;
 let orderCounter = 1; 
 let journalItems = []; 
 let voidDataTemp = null;
+let charts = {};
 
 // --- HELPER FUNCTIONS ---
 function getLocalDate() { const now = new Date(); const offset = now.getTimezoneOffset(); const local = new Date(now.getTime() - (offset*60*1000)); return local.toISOString().split('T')[0]; }
@@ -603,6 +604,10 @@ function switchMenu(menuId) {
         if(endEl) endEl.value = `${y}-${m}-${d}`;
         
         loadKapsterReport();
+    }
+
+    if(menuId === 'dashboard') {
+        loadPerformanceDashboard();
     }
 }
 
@@ -1965,3 +1970,98 @@ setInterval(() => {
         }
     }
 }, 3000);
+
+async function loadPerformanceDashboard() {
+    try {
+        const req = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                action: "get_general_dashboard",
+                payload: { branch: getSelectedBranch() }
+            })
+        });
+        const res = await req.json();
+        
+        if (res.status) {
+            const d = res.data;
+            
+            document.getElementById('d-total-visit').innerText = d.totalVisits;
+            document.getElementById('d-avg-day').innerText = d.avgVisit;
+            document.getElementById('d-top-service').innerText = d.topService;
+            
+            renderChart('chart-traffic', 'line', d.trendLabels, d.trendValues, 'Tren Kunjungan', '#f1c40f');
+            
+            const kapsterNames = Object.keys(d.productivity);
+            const kapsterVals = Object.values(d.productivity);
+            renderChart('chart-employee', 'bar', kapsterNames, kapsterVals, 'Jumlah Kepala (Cuts)', '#3498db');
+            
+            const hoursLabel = [];
+            const hoursData = [];
+            for(let i=8; i<=21; i++) {
+                hoursLabel.push(i + ":00");
+                hoursData.push(d.peakHours[i]);
+            }
+            renderChart('chart-hours', 'bar', hoursLabel, hoursData, 'Kepadatan', '#e74c3c');
+            
+            renderChart('chart-types', 'doughnut', Object.keys(d.visitTypes), Object.values(d.visitTypes), 'Tipe', ['#f1c40f', '#3498db', '#2ecc71']);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Gagal memuat dashboard: " + e);
+    }
+}
+
+function renderChart(canvasId, type, labels, data, labelName, color) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    if (charts[canvasId]) {
+        charts[canvasId].destroy();
+    }
+
+    let bgColors = color;
+    if (!Array.isArray(color) && type !== 'line') {
+        bgColors = labels.map(() => color);
+    }
+    
+    charts[canvasId] = new Chart(ctx, {
+        type: type,
+        data: {
+            labels: labels,
+            datasets: [{
+                label: labelName,
+                data: data,
+                backgroundColor: bgColors,
+                borderColor: Array.isArray(color) ? '#111' : color,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: type === 'line'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: type === 'doughnut',
+                    labels: { color: '#ccc' }
+                }
+            },
+            scales: type === 'doughnut' ? {} : {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#333' },
+                    ticks: { color: '#aaa', stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#aaa' }
+                }
+            }
+        }
+    });
+}
+
+
+
+
+
