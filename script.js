@@ -21,6 +21,16 @@ function formatInputRupiah(el) {
 
     el.value = new Intl.NumberFormat('id-ID').format(parseInt(val));
 }
+function getCurrentDateTime() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const h = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${h}:${min}:${s}`;
+}
 
 function getSelectedBranch() { 
     if (currentUser && currentUser.Branch_Access !== 'HO') return currentUser.Branch_Access; 
@@ -611,7 +621,7 @@ function addNewOrderTab() {
         displayLabel: "Order " + currentCount, 
         cart: [], 
         custName: "", wa: "", type: "WALK-IN", 
-        timeIn: now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0'), 
+        timeIn: getCurrentDateTime(),
         note: "",
 
         savedStylist: "", 
@@ -869,7 +879,7 @@ async function checkout(m) {
             branchId: getSelectedBranch(), 
             tanggal: getLocalDate(), 
             jamIn: o.timeIn, 
-            jamOut: new Date().getHours().toString().padStart(2,'0') + ":" + new Date().getMinutes().toString().padStart(2,'0'), 
+            jamOut: getCurrentDateTime(), 
             customer: o.custName || "Guest", 
             wa: o.wa, 
             visitType: o.type, 
@@ -1955,4 +1965,3 @@ setInterval(() => {
         }
     }
 }, 3000);
-
