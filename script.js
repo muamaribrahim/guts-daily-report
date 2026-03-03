@@ -2014,27 +2014,24 @@ async function loadPerformanceDashboard() {
             const kapsterData = Object.values(d.productivity);
             const kapsterPalette = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
             const kapsterColors = kapsterLabels.map((_, i) => kapsterPalette[i % kapsterPalette.length]);
-            
             renderChart('chart-employee', 'bar', kapsterLabels, kapsterData, 'Jumlah Cuts', kapsterColors);
             
             renderChart('chart-types', 'doughnut', Object.keys(d.visitTypes), Object.values(d.visitTypes), 'Tipe', ['#f1c40f', '#3498db', '#2ecc71']);
 
-            const itemLabels = [];
-            const itemData = [];
-            const itemColors = [];
+            renderChart('chart-payment', 'doughnut', Object.keys(d.paymentMethods), Object.values(d.paymentMethods), 'Metode', ['#27ae60', '#2980b9']);
 
-            for(let [name, qty] of Object.entries(d.serviceDetails)) {
-                itemLabels.push("[Jasa] " + name);
-                itemData.push(qty);
-                itemColors.push('#9b59b6'); 
-            }
-            for(let [name, qty] of Object.entries(d.productDetails)) {
-                itemLabels.push("[Produk] " + name);
-                itemData.push(qty);
-                itemColors.push('#e67e22'); 
-            }
+            const sortedSvc = Object.entries(d.serviceDetails).sort((a,b) => b[1] - a[1]);
+            const svcLabels = sortedSvc.map(x => x[0]);
+            const svcData = sortedSvc.map(x => x[1]);
+            renderChart('chart-services', 'bar', svcLabels, svcData, 'Jasa Terjual', '#9b59b6');
 
-            renderChart('chart-composition', 'bar', itemLabels, itemData, 'Qty Terjual', itemColors);
+            const sortedProd = Object.entries(d.productDetails).sort((a,b) => b[1] - a[1]);
+            const prodLabels = sortedProd.map(x => x[0]);
+            const prodData = sortedProd.map(x => x[1]);
+            if(prodLabels.length === 0) {
+                 prodLabels.push("Belum ada penjualan"); prodData.push(0);
+            }
+            renderChart('chart-products', 'bar', prodLabels, prodData, 'Produk Terjual', '#e67e22');
 
             renderHeatmap(d.peakHours);
         }
