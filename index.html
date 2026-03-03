@@ -191,6 +191,70 @@
             .top-left .status-ind span { display: none; }
         }
         @keyframes popUp { from { transform: translateY(100px); } to { transform: translateY(0); } }
+
+        /* DASHBOARD GRID SYSTEM */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-auto-rows: minmax(280px, auto);
+            gap: 20px;
+            padding-bottom: 50px;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            height: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .heatmap-card {
+            grid-column: 1 / -1;
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            height: auto;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(13, 1fr);
+            gap: 5px;
+            margin-top: 15px;
+        }
+
+        .heatmap-box {
+            background: #333;
+            border-radius: 6px;
+            padding: 10px 5px;
+            text-align: center;
+            color: #fff;
+            transition: transform 0.2s;
+        }
+
+        .heatmap-box:hover {
+            transform: scale(1.1);
+            border: 1px solid white;
+        }
+
+        .hm-hour { font-size: 0.9em; font-weight: bold; margin-bottom: 5px; }
+        .hm-val { font-size: 1.2em; font-weight: 800; }
+
+        @media (max-width: 768px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .heatmap-grid { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        }
     </style>
 </head>
 <body>
@@ -284,7 +348,7 @@
 
             <section id="view-dashboard" class="view-section hidden">
                 <header class="content-header">
-                    <h3><i class="fas fa-chart-pie"></i> Performa Operasional Toko</h3>
+                    <h3><i class="fas fa-chart-pie"></i> Performa Operasional</h3>
                     <button class="btn-xs" style="width:auto; padding:4px 15px; background:var(--accent); color:black; font-weight:bold; border-radius:4px;" onclick="loadPerformanceDashboard()">
                         <i class="fas fa-sync"></i> Refresh
                     </button>
@@ -308,29 +372,42 @@
                     </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px; padding-bottom:50px;">
+                <div class="dashboard-grid">
                     
-                    <div style="background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid #333;">
-                        <h4 style="color:var(--text-muted); margin-bottom:15px;">Tren Kunjungan (7 Hari Terakhir)</h4>
-                        <canvas id="chart-traffic"></canvas>
+                    <div class="chart-card">
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tren Kunjungan (7 Hari)</h4>
+                        <div class="chart-container">
+                            <canvas id="chart-traffic"></canvas>
+                        </div>
                     </div>
 
-                    <div style="background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid #333;">
-                        <h4 style="color:var(--text-muted); margin-bottom:15px;">Produktivitas Kapster (Qty Jasa)</h4>
-                        <canvas id="chart-employee"></canvas>
+                    <div class="chart-card">
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Produktivitas Kapster</h4>
+                        <div class="chart-container">
+                            <canvas id="chart-employee"></canvas>
+                        </div>
                     </div>
 
-                    <div style="background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid #333;">
-                        <h4 style="color:var(--text-muted); margin-bottom:15px;">Analisa Jam Sibuk (Peak Hours)</h4>
-                        <canvas id="chart-hours"></canvas>
-                    </div>
-
-                    <div style="background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid #333;">
-                        <h4 style="color:var(--text-muted); margin-bottom:15px;">Tipe Kunjungan</h4>
-                        <div style="height:250px; display:flex; justify-content:center;">
+                    <div class="chart-card">
+                        <h4 style="color:var(--text-muted); margin-bottom:10px; font-size:0.9em;">Tipe Kunjungan</h4>
+                        <div class="chart-container">
                             <canvas id="chart-types"></canvas>
                         </div>
                     </div>
+
+                    <div class="chart-card" style="justify-content:center; align-items:center; text-align:center;">
+                        <i class="fas fa-smile-wink fa-3x" style="color:#333; margin-bottom:10px;"></i>
+                        <div style="color:#666;">Data Analisis Lainnya</div>
+                    </div>
+
+                    <div class="heatmap-card">
+                        <h4 style="color:var(--accent); margin-bottom:5px;"><i class="fas fa-fire"></i> Analisa Jam Sibuk (09:00 - 21:00)</h4>
+                        <div style="font-size:0.8em; color:#888;">Semakin terang warnanya, semakin ramai pengunjung pada jam tersebut.</div>
+                        
+                        <div id="heatmap-container" class="heatmap-grid">
+                            </div>
+                    </div>
+
                 </div>
             </section>
 
@@ -357,7 +434,7 @@
                         <div id="pos-workspace" class="hidden">
                             <div style="background:#222; padding:15px; border-radius:8px; display:grid; grid-template-columns: 2fr 1.5fr 1fr; gap:10px; margin-bottom:15px;">
                                 <div><label>Kapster</label><input type="text" id="cust-name" placeholder="Guest" onchange="saveCurrentState()"></div>
-                                <div><label>Customer - No WA</label><input type="text" id="cust-wa" placeholder="" onchange="saveCurrentState()"></div>
+                                <div><label>Nama Customer - No WA</label><input type="text" id="cust-wa" placeholder="" onchange="saveCurrentState()"></div>
                                 <div><label>Tipe</label>
                                     <select id="visit-type" onchange="saveCurrentState()">
                                         <option value="WALK-IN">Walk-In</option>
