@@ -1982,7 +1982,7 @@ setInterval(() => {
 }, 3000);
 
 async function loadPerformanceDashboard() {
-    const btn = document.querySelector('#view-dashboard button'); // Tombol Filter
+    const btn = document.querySelector('#view-dashboard button'); 
     const oriHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     btn.disabled = true;
@@ -2005,17 +2005,36 @@ async function loadPerformanceDashboard() {
             const d = res.data;
             
             document.getElementById('d-total-visit').innerText = d.totalVisits;
-            document.getElementById('d-avg-day').innerText = d.avgVisit;
+            document.getElementById('d-avg-day').innerText = d.avgVisit; 
             document.getElementById('d-top-service').innerText = d.topService;
             
             renderChart('chart-traffic', 'line', d.trendLabels, d.trendValues, 'Kunjungan', '#f1c40f');
             
-            renderChart('chart-employee', 'bar', Object.keys(d.productivity), Object.values(d.productivity), 'Cuts', '#3498db');
+            const kapsterLabels = Object.keys(d.productivity);
+            const kapsterData = Object.values(d.productivity);
+            const kapsterPalette = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#34495e'];
+            const kapsterColors = kapsterLabels.map((_, i) => kapsterPalette[i % kapsterPalette.length]);
+            
+            renderChart('chart-employee', 'bar', kapsterLabels, kapsterData, 'Jumlah Cuts', kapsterColors);
             
             renderChart('chart-types', 'doughnut', Object.keys(d.visitTypes), Object.values(d.visitTypes), 'Tipe', ['#f1c40f', '#3498db', '#2ecc71']);
 
-            const compData = d.itemComposition; 
-            renderChart('chart-composition', 'pie', ['Jasa (Service)', 'Produk (Goods)'], [compData.SERVICE, compData.PRODUCT], 'Qty', ['#9b59b6', '#e67e22']);
+            const itemLabels = [];
+            const itemData = [];
+            const itemColors = [];
+
+            for(let [name, qty] of Object.entries(d.serviceDetails)) {
+                itemLabels.push("[Jasa] " + name);
+                itemData.push(qty);
+                itemColors.push('#9b59b6'); 
+            }
+            for(let [name, qty] of Object.entries(d.productDetails)) {
+                itemLabels.push("[Produk] " + name);
+                itemData.push(qty);
+                itemColors.push('#e67e22'); 
+            }
+
+            renderChart('chart-composition', 'bar', itemLabels, itemData, 'Qty Terjual', itemColors);
 
             renderHeatmap(d.peakHours);
         }
