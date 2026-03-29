@@ -4,7 +4,6 @@ const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './script.js',
-    './style.css',
     './manifest.json',
     './Square150x150Logo.scale-192.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
