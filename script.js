@@ -893,7 +893,7 @@ async function checkout(m) {
             cashIn: cIn, 
             change: change, 
             note: o.note,
-            offlineId: "OFF-" + new Date().getTime() 
+            offlineId: "OFF-" + new Date().getTime() + "-" + Math.random().toString(36).slice(2, 8) // kunci unik anti double-entry (dicek server)
         }, 
         items: o.cart 
     };
@@ -1363,7 +1363,7 @@ async function saveComplexJournal() {
         }); 
     }
 
-    const payloadData = { branch: getSelectedBranch(), date: date, category: cat, items: items };
+    const payloadData = { branch: getSelectedBranch(), date: date, category: cat, items: items, clientRef: "GL-" + new Date().getTime() + "-" + Math.random().toString(36).slice(2, 8) }; // clientRef: kunci unik anti double-entry (dicek server)
 
     setStatus('saving'); 
     document.getElementById('loading-overlay').classList.remove('hidden');
@@ -1814,6 +1814,16 @@ let isSyncing = false;
 
 async function processOfflineQueue() {
     if (isSyncing) return;
+    try {
+        await runOfflineQueue();
+    } catch (e) {
+        console.error("Sync antrian offline error:", e);
+    } finally {
+        isSyncing = false; // selalu direset agar sync tidak macet setelah error
+    }
+}
+
+async function runOfflineQueue() {
 
     const rawAbsen = localStorage.getItem('guts_absen_queue');
     const rawTrx = localStorage.getItem('guts_trx_queue');
@@ -1858,6 +1868,7 @@ async function processOfflineQueue() {
         document.body.appendChild(notif);
 
         const queueToProcess = [...trxQueue];
+        const rejected = []; // ditolak server (bukan gagal koneksi)
         
         for (let item of queueToProcess) {
             try {
@@ -1867,7 +1878,10 @@ async function processOfflineQueue() {
                 });
                 const res = await req.json();
 
-                if(res.status || !res.status) {
+                // Server sudah menjawab (diterima / duplikat / ditolak) -> hapus dari antrian.
+                // Jika fetch gagal (masuk catch), item TETAP di antrian dan dikirim ulang;
+                // server mengenali offlineId sehingga kiriman ulang TIDAK menjadi double entry.
+                if (res && typeof res.status !== "undefined") {
                     
                     let currentTrxStore = JSON.parse(localStorage.getItem('guts_trx_queue') || "[]");
                     
@@ -1880,7 +1894,11 @@ async function processOfflineQueue() {
                         localStorage.removeItem('guts_trx_queue');
                     }
                     
-                    if(!res.status) console.warn("Transaksi ditolak server:", res.message);
+                    if(res.data && res.data.duplicate) console.info("Duplikat dicegah server, transaksi sudah ada:", idToDelete, "->", res.data.newID);
+                    if(!res.status) {
+                        console.warn("Transaksi ditolak server:", res.message);
+                        rejected.push(`${item.header.customer || "Guest"} - ${fmtRp(item.header.grandTotal)} (${res.message})`);
+                    }
                 }
 
             } catch (e) {
@@ -1888,6 +1906,7 @@ async function processOfflineQueue() {
             }
         }
         
+        if (rejected.length) alert("PERHATIAN: " + rejected.length + " transaksi offline DITOLAK server dan dikeluarkan dari antrian:\n\n" + rejected.join("\n") + "\n\nCatat ulang secara manual jika diperlukan.");
         const sisaQueue = JSON.parse(localStorage.getItem('guts_trx_queue') || "[]");
         if (sisaQueue.length === 0) {
             notif.style.background = "var(--green)";
