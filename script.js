@@ -193,15 +193,28 @@ async function performLogin() {
 async function performLoginCheck() {
     const btn = document.getElementById('btn-login');
 
-    const savedShift = localStorage.getItem('guts_shift_' + (currentUser.Username || currentUser.username));
+    const shiftKey = 'guts_shift_' + (currentUser.Username || currentUser.username);
+    const savedShift = localStorage.getItem(shiftKey);
     if(savedShift) {
-        console.log("Melanjutkan sesi dari Local Storage.");
-        currentShift = JSON.parse(savedShift);
-        
-        if(btn) btn.innerHTML = '<i class="fas fa-check"></i> Success';
-        
-        showDashboard();
-        return;
+        let parsedShift = null;
+        try { parsedShift = JSON.parse(savedShift); } catch(e) { parsedShift = null; }
+        const shiftDay = (parsedShift && parsedShift.startTime) ? new Date(parsedShift.startTime) : null;
+        const isToday = !!(shiftDay && !isNaN(shiftDay.getTime()) && shiftDay.toDateString() === new Date().toDateString());
+
+        if (parsedShift && isToday) {
+            console.log("Melanjutkan sesi dari Local Storage.");
+            currentShift = parsedShift;
+            if(btn) btn.innerHTML = '<i class="fas fa-check"></i> Success';
+            showDashboard();
+            return;
+        }
+
+        // Shift tersimpan berasal dari hari lain (shift gantung): jangan dilanjutkan.
+        // Jika shift itu dibuka saat offline dan belum pernah terkirim, coba kirim dulu agar tercatat di hari aslinya.
+        console.log("Shift tersimpan bukan hari ini, diabaikan.");
+        if (parsedShift && parsedShift.isOffline) { currentShift = parsedShift; await syncOfflineShift(); }
+        currentShift = null;
+        localStorage.removeItem(shiftKey);
     }
 
     if(btn) {
@@ -214,7 +227,7 @@ async function performLoginCheck() {
             method: "POST",
             body: JSON.stringify({ 
                 action: "check_open_shift", 
-                payload: { user: currentUser.Username || currentUser.username } 
+                payload: { user: currentUser.Username || currentUser.username, date: getLocalDate() } 
             })
         });
         const res = await req.json();
@@ -299,12 +312,13 @@ async function processOpenShift() {
         if(res.status) {
             setStatus('saved');
             
-            currentShift = { 
-                id: res.data.shiftId, 
-                startBal: bal, 
-                startTime: shiftData.startTime 
+            currentShift = {
+                id: res.data.shiftId,
+                startBal: (res.data.startBal !== undefined && res.data.startBal !== null) ? cleanNum(res.data.startBal) : bal,
+                startTime: res.data.startTime || shiftData.startTime
             };
             localStorage.setItem('guts_shift_' + shiftData.user, JSON.stringify(currentShift));
+            if (res.data.reused) alert("ℹ️ Shift OPEN hari ini sudah ada di server. Sesi dilanjutkan dengan saldo awal " + fmtRp(currentShift.startBal) + ".");
             
             document.getElementById('modal-open-shift').classList.add('hidden');
             
@@ -326,7 +340,9 @@ async function processOpenShift() {
                 id: "OFF-SHIFT-" + new Date().getTime(), 
                 startBal: bal, 
                 startTime: shiftData.startTime,
-                isOffline: true 
+                isOffline: true,
+                branch: shiftData.branch,
+                user: shiftData.user
             };
             
             localStorage.setItem('guts_shift_' + shiftData.user, JSON.stringify(currentShift));
@@ -402,6 +418,17 @@ async function processCloseShift() {
     btn.disabled = true;
     setStatus('saving');
 
+    // Shift yang dibuka saat OFFLINE harus tersinkron dulu agar server mengenal shiftId-nya
+    if (currentShift && currentShift.isOffline) {
+        const synced = await syncOfflineShift();
+        if (!synced) {
+            setStatus('offline');
+            alert("⚠️ Shift ini dibuka saat OFFLINE dan belum tersinkron ke server.\nPastikan internet tersambung, lalu klik Closing lagi.");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            return;
+        }
+    }
     try {
         const req = await fetch(API_URL, { 
             method: "POST", 
@@ -801,7 +828,7 @@ function renderCart() {
             const p = masterData.promo.find(x => x.Kode === it.discMode); 
             if(p) nDisc = p.Tipe === 'PERSEN' ? it.price * parseFloat(p.Nilai) : parseFloat(p.Nilai); 
         } 
-        tG += it.price * it.qty; tD += nDisc * it.qty; it.discPerItem = (nDisc / it.qty) || 0; 
+        tG += it.price * it.qty; tD += nDisc * it.qty; it.discPerItem = nDisc || 0; /* diskon PER UNIT; backend mengalikan dengan qty */ 
 
         html += `
         <tr>
@@ -1164,7 +1191,7 @@ async function executeVoid() {
     try {
         const req = await fetch(API_URL, {method: "POST", body: JSON.stringify({action: "void_transaksi", payload: { ...voidDataTemp, adminPass: pass }})});
         const res = await req.json();
-        if(res.status) { setStatus('saved'); alert("VOID BERHASIL"); location.reload(); } else { setStatus('error'); alert("Gagal: " + res.message); }
+        if(res.status) { setStatus('saved'); alert((res.data && res.data.alreadyVoided) ? res.message : "VOID BERHASIL"); location.reload(); } else { setStatus('error'); alert("Gagal: " + res.message); }
     } catch(e) { setStatus('error'); alert("Error: " + e); } 
     document.getElementById('loading-overlay').classList.add('hidden');
 }
@@ -1810,11 +1837,43 @@ async function syncOrderCounter() {
     }
 }
 
-let isSyncing = false; 
+// Sinkronkan shift yang dibuka saat OFFLINE ke server (dipanggil saat online kembali & sebelum closing).
+// Server memakai startTime sebagai ID deterministik, jadi aman dipanggil berulang.
+async function syncOfflineShift() {
+    if (!currentShift || !currentShift.isOffline || !currentUser) return false;
+    const user = currentShift.user || currentUser.Username || currentUser.username;
+    const payload = {
+        branch: currentShift.branch || getSelectedBranch(),
+        user: user,
+        startBal: currentShift.startBal,
+        startTime: currentShift.startTime
+    };
+    try {
+        const req = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "open_shift", payload: payload }) });
+        const res = await req.json();
+        if (res.status && res.data && res.data.shiftId) {
+            currentShift = {
+                id: res.data.shiftId,
+                startBal: (res.data.startBal !== undefined && res.data.startBal !== null) ? cleanNum(res.data.startBal) : currentShift.startBal,
+                startTime: currentShift.startTime
+            };
+            localStorage.setItem('guts_shift_' + user, JSON.stringify(currentShift));
+            console.log("Shift offline tersinkron ke server:", res.data.shiftId);
+            return true;
+        }
+    } catch (e) {
+        console.log("Shift offline belum bisa disinkron (masih offline).");
+    }
+    return false;
+}
+
+let isSyncing = false;
 
 async function processOfflineQueue() {
     if (isSyncing) return;
+    isSyncing = true;
     try {
+        await syncOfflineShift(); // shift yang dibuka saat offline dikirim lebih dulu
         await runOfflineQueue();
     } catch (e) {
         console.error("Sync antrian offline error:", e);
@@ -1970,7 +2029,8 @@ setInterval(() => {
     
     const rawTrx = localStorage.getItem('guts_trx_queue');
     const rawAbsen = localStorage.getItem('guts_absen_queue');
-    const hasQueue = (rawTrx || rawAbsen);
+    const rawJurnal = localStorage.getItem('guts_journal_queue');
+    const hasQueue = (rawTrx || rawAbsen || rawJurnal || (currentShift && currentShift.isOffline));
 
     if (isOnline && hasQueue) {
         console.log("Auto-Sync: Mendeteksi koneksi & antrian. Mencoba kirim data...");
