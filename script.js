@@ -1741,6 +1741,7 @@ async function submitAbsensi() {
     const payloadData = { 
         nama: nama, 
         shift: shift, 
+        branch: getSelectedBranch(),
         tanggal: getLocalDate(), 
         foto: fotoAbsenBase64 
     };
