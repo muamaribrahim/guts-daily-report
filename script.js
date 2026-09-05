@@ -903,6 +903,20 @@ async function checkout(m) {
         }
     }
     
+    // Produk tanpa seller mewarisi kapster dari item JASA pertama di order yang sama
+    // (customer cukur + beli produk ke karyawan yang sama). Backend menerapkan aturan yang sama sebagai sumber kebenaran.
+    const itemsToSend = o.cart.map(it => Object.assign({}, it));
+    const kapsterJasa = itemsToSend.find(it => it.type === 'SERVICE' && it.stylistId);
+    if (kapsterJasa) {
+        itemsToSend.forEach(it => {
+            if (it.type !== 'SERVICE' && !it.stylistId) {
+                it.stylistId = kapsterJasa.stylistId;
+                it.stylistName = kapsterJasa.stylistName;
+                it.stylistInherited = true;
+            }
+        });
+    }
+
     const payloadData = { 
         header: {
             branchId: getSelectedBranch(), 
@@ -922,7 +936,7 @@ async function checkout(m) {
             note: o.note,
             offlineId: "OFF-" + new Date().getTime() + "-" + Math.random().toString(36).slice(2, 8) // kunci unik anti double-entry (dicek server)
         }, 
-        items: o.cart 
+        items: itemsToSend 
     };
 
     setStatus('saving'); 
