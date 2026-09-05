@@ -358,12 +358,14 @@ async function prepareCloseShift() {
         const req = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "get_monthly_rekap", payload: {branch: getSelectedBranch(), date: getLocalDate()} }) });
         const res = await req.json();
         const start = currentShift.startBal;
-        const todayData = res.data.rekap.find(r => r.date === getLocalDate()) || { cashIn: 0, pettyUsage: 0 };
-        const sysCalc = start + todayData.cashIn - todayData.pettyUsage;
+        const todayData = res.data.rekap.find(r => r.date === getLocalDate()) || { cashIn: 0, pettyUsage: 0, tipsCashOut: 0 };
+        const tipsOut = todayData.tipsCashOut || 0; // payout tips tunai (Kas Toko 111)
+        const sysCalc = start + todayData.cashIn - todayData.pettyUsage - tipsOut;
         
         document.getElementById('disp-start-bal').innerText = fmtRp(start);
         document.getElementById('disp-cash-in').innerText = fmtRp(todayData.cashIn);
         document.getElementById('disp-cash-out').innerText = fmtRp(todayData.pettyUsage);
+        document.getElementById('disp-tips-out').innerText = fmtRp(tipsOut);
         document.getElementById('disp-sys-calc').innerText = fmtRp(sysCalc);
         document.getElementById('modal-close-shift').dataset.sys = sysCalc;
         document.getElementById('modal-close-shift').classList.remove('hidden');
@@ -1456,11 +1458,11 @@ async function loadJournalHistory() {
 }
 
 async function loadMonthlyRecap() {
-    const d = document.getElementById('rekap-monthly-tbody'); d.innerHTML = '<tr><td colspan="7">Loading...</td></tr>'; 
+    const d = document.getElementById('rekap-monthly-tbody'); d.innerHTML = '<tr><td colspan="8">Loading...</td></tr>'; 
     try { const req = await fetch(API_URL, { method: "POST", body: JSON.stringify({action: "get_monthly_rekap", payload: {branch: getSelectedBranch(), date: getLocalDate()} }) }); const res = await req.json(); 
         document.getElementById('val-start-petty').innerText = fmtRp(res.data.startBalance); document.getElementById('val-refill').innerText = fmtRp(res.data.refillNeeded); document.getElementById('val-curr-petty').innerText = fmtRp(res.data.currentBalance);
-        let html = ''; if(res.data.rekap.length){ res.data.rekap.forEach(r => { html += `<tr><td>${r.date}</td><td style="color:var(--green)">${fmtRp(r.cashIn)}</td><td style="color:#3498db">${fmtRp(r.qrisIn)}</td><td style="color:var(--red)">${fmtRp(r.pettyUsage)}</td><td style="font-weight:bold">${fmtRp(r.saldoCash)}</td><td>${r.cust}</td><td>${r.promo}</td></tr>`; }); d.innerHTML = html; } else d.innerHTML = '<tr><td colspan="7" align="center">Data Kosong</td></tr>';
-    } catch (e) { d.innerHTML = `<tr><td colspan="7">${e}</td></tr>`; }
+        let html = ''; if(res.data.rekap.length){ res.data.rekap.forEach(r => { html += `<tr><td>${r.date}</td><td style="color:var(--green)">${fmtRp(r.cashIn)}</td><td style="color:#3498db">${fmtRp(r.qrisIn)}</td><td style="color:var(--red)">${fmtRp(r.pettyUsage)}</td><td style="color:var(--red)">${fmtRp(r.tipsCashOut || 0)}</td><td style="font-weight:bold">${fmtRp(r.saldoCash)}</td><td>${r.cust}</td><td>${r.promo}</td></tr>`; }); d.innerHTML = html; } else d.innerHTML = '<tr><td colspan="8" align="center">Data Kosong</td></tr>';
+    } catch (e) { d.innerHTML = `<tr><td colspan="8">${e}</td></tr>`; }
 }
 
 function renderStockView() {
