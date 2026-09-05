@@ -1,4 +1,4 @@
-const CACHE_NAME = 'GutsBarberandShop.v19'; 
+const CACHE_NAME = 'GutsBarberandShop.v20'; 
 
 const ASSETS_TO_CACHE = [
     './',
