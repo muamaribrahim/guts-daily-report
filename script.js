@@ -1,5 +1,33 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbwEU0CaTbR2LtlZuTs-2-iMAyrHupSdlCvoK9edFxJYyv7PUxAEM4zj0t2k9108OBQhEA/exec"; 
 
+// ===== JALUR CADANGAN API (opsional) =====
+// Setiap respons Apps Script dialihkan ke script.googleusercontent.com. Bila ISP memblokir host itu,
+// permintaan menggantung lalu gagal. Isi API_RELAY_URL dengan URL relay (Cloudflare Worker, lihat relay-worker.js)
+// agar aplikasi otomatis mencoba jalur cadangan saat jalur langsung gagal. Kosong = tidak dipakai.
+const API_RELAY_URL = "";
+const API_TIMEOUT_MS = 60000;
+(function pasangJalurCadangan() {
+    const fetchAsli = window.fetch.bind(window);
+    window.fetch = async function (url, opts) {
+        const u = String(url);
+        if (!u.startsWith(API_URL)) return fetchAsli(url, opts);
+        const coba = async (target) => {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+            try { return await fetchAsli(target, Object.assign({}, opts || {}, { signal: ctrl.signal })); }
+            finally { clearTimeout(timer); }
+        };
+        try {
+            return await coba(url);
+        } catch (e) {
+            if (!API_RELAY_URL) throw e;
+            console.warn("API langsung gagal, mencoba jalur cadangan:", e && e.message);
+            const query = u.indexOf("?") >= 0 ? u.slice(u.indexOf("?")) : "";
+            return await coba(API_RELAY_URL + query);
+        }
+    };
+})();
+
 let currentUser = null;
 let currentShift = null; 
 let masterData = { produk: [], karyawan: [], promo: [], coa: [] };
@@ -953,8 +981,13 @@ async function checkout(m) {
             setStatus('saved'); 
             payloadData.header.id = res.data.newID;
             finalizeTransaction(payloadData, true);
-        } else { 
-            throw new Error(res.message); 
+        } else {
+            // Server MENJAWAB tetapi MENOLAK: bukan masalah koneksi. Jangan masuk antrian offline,
+            // jangan cetak struk; order tetap terbuka agar kasir bisa mencoba lagi (server anti double entry).
+            setStatus('error');
+            document.getElementById('loading-overlay').classList.add('hidden');
+            alert("Transaksi DITOLAK server: " + (res.message || "Unknown error") + "\n\nOrder masih terbuka, silakan coba lagi.");
+            return;
         }
 
     } catch(e) { 
@@ -1106,7 +1139,7 @@ function renderDailyTable(dataList) {
             }
         } catch(e){ console.error(e); }
         
-        const fullData = encodeURIComponent(JSON.stringify(r));
+        const fullData = encodeURIComponent(JSON.stringify(r)).replace(/'/g, '%27'); // apostrof harus di-escape untuk atribut onclick
         let jamTampil = String(r.jamOut).replace('.', ':');
         
         html += `<tr onclick="${(isVoid || isReversal || isOffline) ? '' : `showTrxDetail('${fullData}')`}" style="${rowStyle}">
@@ -1353,7 +1386,7 @@ function searchAkun(el, i) {
     const d = document.getElementById(`res-${i}`); 
     d.innerHTML = '';
     
-    const m = masterData.coa.filter(c => c.Kode_Akun.includes(q) || c.Nama_Akun.toLowerCase().includes(q));
+    const m = masterData.coa.filter(c => String(c.Kode_Akun).includes(q) || String(c.Nama_Akun).toLowerCase().includes(q)); // kode akun bisa bertipe angka dari sheet
     
     if (m.length) { 
         d.classList.remove('hidden'); 
@@ -1389,6 +1422,7 @@ function calcJ() { let d = 0, k = 0; journalItems.forEach(i => {d += i.debit; k 
 async function saveComplexJournal() {
     const cat = document.getElementById('journal-category').value;
     const date = document.getElementById('journal-date').value;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return alert("Tanggal jurnal wajib diisi!");
     
     if(document.getElementById('balance-status').innerText !== "Balance") return alert("Tidak Balance!");
     if(journalItems.length === 0) return alert("Belum ada baris jurnal!");
@@ -1421,7 +1455,11 @@ async function saveComplexJournal() {
             alert("Jurnal berhasil disimpan!"); 
             journalItems = []; renderJournalRows(); loadJournalHistory();
         } else {
-            throw new Error(res.message);
+            // Server MENJAWAB tetapi MENOLAK (tanggal/akun tidak valid): bukan masalah koneksi,
+            // jadi jangan masuk antrian offline. Baris jurnal dibiarkan agar bisa diperbaiki lalu disimpan lagi.
+            setStatus('error');
+            document.getElementById('loading-overlay').classList.add('hidden');
+            return alert("Jurnal DITOLAK server: " + res.message);
         }
 
     } catch(e) {
@@ -1996,20 +2034,27 @@ async function runOfflineQueue() {
     let jurnalQueue = JSON.parse(rawJurnal || "[]");
     if (jurnalQueue.length > 0) {
         const queueToProcess = [...jurnalQueue];
+        const rejectedJurnal = [];
         for (let item of queueToProcess) {
             try {
-                await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "save_general_journal", payload: item }) });
-                
-                let currentJurnalStore = JSON.parse(localStorage.getItem('guts_journal_queue') || "[]");
-                currentJurnalStore = currentJurnalStore.filter(j => JSON.stringify(j) !== JSON.stringify(item));
-                
-                if(currentJurnalStore.length > 0) localStorage.setItem('guts_journal_queue', JSON.stringify(currentJurnalStore));
-                else {
-                    localStorage.removeItem('guts_journal_queue');
-                    if(!document.getElementById('view-ops').classList.contains('hidden')) loadJournalHistory();
+                const req = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "save_general_journal", payload: item }) });
+                const res = await req.json();
+                // Server sudah menjawab (diterima / duplikat / ditolak) -> keluarkan dari antrian; gagal jaringan -> tetap di antrian
+                if (res && typeof res.status !== "undefined") {
+                    let currentJurnalStore = JSON.parse(localStorage.getItem('guts_journal_queue') || "[]");
+                    currentJurnalStore = currentJurnalStore.filter(j => j.clientRef ? j.clientRef !== item.clientRef : JSON.stringify(j) !== JSON.stringify(item));
+                    if(currentJurnalStore.length > 0) localStorage.setItem('guts_journal_queue', JSON.stringify(currentJurnalStore));
+                    else {
+                        localStorage.removeItem('guts_journal_queue');
+                        if(!document.getElementById('view-ops').classList.contains('hidden')) loadJournalHistory();
+                    }
+                    if(!res.status) rejectedJurnal.push(`${item.date || "(tanpa tanggal)"} ${item.branch || ""} ${item.category || ""}: ${res.message}`);
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.log("Gagal kirim jurnal, data dalam antrian.");
+            }
         }
+        if (rejectedJurnal.length) alert("PERHATIAN: " + rejectedJurnal.length + " jurnal offline DITOLAK server dan dikeluarkan dari antrian:\n\n" + rejectedJurnal.join("\n") + "\n\nCatat ulang lewat tab Pembukuan.");
     }
 
     isSyncing = false;
