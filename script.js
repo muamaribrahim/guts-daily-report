@@ -1,4 +1,4 @@
-const API_URL = ""; 
+//const API_URL = ""; 
 
 // ===== JALUR CADANGAN API (opsional) =====
 // Setiap respons Apps Script dialihkan ke script.googleusercontent.com. Bila ISP memblokir host itu,
