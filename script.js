@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzq03jg3KbzYXDUUk1LFsaZeKOFdXmAW_00u56Bzro77FAkZcFwPdvQtoIsf3h8Kb8MXw/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbwEU0CaTbR2LtlZuTs-2-iMAyrHupSdlCvoK9edFxJYyv7PUxAEM4zj0t2k9108OBQhEA/exec"; 
 
 // ===== JALUR CADANGAN API (opsional) =====
 // Setiap respons Apps Script dialihkan ke script.googleusercontent.com. Bila ISP memblokir host itu,
@@ -2245,7 +2245,6 @@ function renderChart(canvasId, type, labels, data, labelName, color) {
         }
     });
 }
-
 
 
 
