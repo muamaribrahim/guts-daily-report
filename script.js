@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzq03jg3KbzYXDUUk1LFsaZeKOFdXmAW_00u56Bzro77FAkZcFwPdvQtoIsf3h8Kb8MXw/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbyptXmbl9becf5Yg6BZfdd1rhYIzy1MoTXDhrnOVyY2NtnQgwNpFs9GQNZQ1WzmECMA9w/exec"; 
 
 // ===== JALUR CADANGAN API (opsional) =====
 // Setiap respons Apps Script dialihkan ke script.googleusercontent.com. Bila ISP memblokir host itu,
